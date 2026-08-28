@@ -37,6 +37,7 @@ class ResolvePass extends RenderGraphPass {
     bool debugViewActive = false,
     double debugViewSplit = -1.0,
     bool debugSkipsPost = false,
+    FinalCommandBufferCallback? beforeSubmit,
   }) : _outputColor = outputColor,
        _exposure = exposure,
        _toneMappingMode = toneMappingMode,
@@ -45,7 +46,8 @@ class ResolvePass extends RenderGraphPass {
        _postProcess = postProcess,
        _debugViewActive = debugViewActive,
        _debugViewSplit = debugViewSplit,
-       _debugSkipsPost = debugSkipsPost;
+       _debugSkipsPost = debugSkipsPost,
+       _beforeSubmit = beforeSubmit;
 
   final gpu.Texture _outputColor;
   final double _exposure;
@@ -60,6 +62,7 @@ class ResolvePass extends RenderGraphPass {
   // The frame skipped bloom for a debug view, so the resolve must not add
   // it back whatever the settings say.
   final bool _debugSkipsPost;
+  final FinalCommandBufferCallback? _beforeSubmit;
 
   static final gpu.Shader _vertexShader =
       baseShaderLibrary['FullscreenVertex']!;
@@ -176,6 +179,7 @@ class ResolvePass extends RenderGraphPass {
       ),
     );
     drawCompat(renderPass, 6);
+    _beforeSubmit?.call(commandBuffer);
     rendererSubmissions.submit(commandBuffer);
 
     context.blackboard.set(kDisplayColorBlackboardKey, _outputColor);

@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 import 'dart:math' as math;
 
 // flutter_scene's physics BoxShape clashes with Flutter's painting BoxShape,
@@ -72,7 +73,7 @@ class ExamplePhysicsCarState extends State<ExamplePhysicsCar> {
     _buildGround();
     _buildCourse();
     _buildProps();
-    _load();
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {

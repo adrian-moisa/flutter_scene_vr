@@ -43,10 +43,12 @@ bool sceneHasDisplayReferred(RenderScene renderScene) {
 /// unresampled. Without MSAA it runs before FXAA/SMAA instead, which is the
 /// only thing that would smooth that silhouette.
 class DisplayReferredCompositePass extends RenderGraphPass {
-  DisplayReferredCompositePass({required gpu.Texture output})
-    : _output = output;
+  DisplayReferredCompositePass({required gpu.Texture output,
+    FinalCommandBufferCallback? beforeSubmit})
+    : _output = output, _beforeSubmit = beforeSubmit;
 
   final gpu.Texture _output;
+  final FinalCommandBufferCallback? _beforeSubmit;
 
   static final gpu.Shader _vertexShader =
       baseShaderLibrary['FullscreenVertex']!;
@@ -108,6 +110,7 @@ class DisplayReferredCompositePass extends RenderGraphPass {
       sampler: _linearClamp,
     );
     drawCompat(renderPass, 6);
+    _beforeSubmit?.call(commandBuffer);
     rendererSubmissions.submit(commandBuffer);
 
     context.blackboard.set(kDisplayColorBlackboardKey, _output);

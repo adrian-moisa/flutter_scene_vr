@@ -198,7 +198,7 @@ class PreprocessedMaterial extends Material implements HotReloadableFmat {
     parameters.bind(pass, shader, transientsBuffer);
     pass.bindUniform(
       shader.cachedUniformSlot('FragmentKeepAlive'),
-      transientsBuffer.emplace(_zeroKeepAlive),
+      _zeroKeepAlive,
     );
   }
 
@@ -368,8 +368,14 @@ class PreprocessedMaterial extends Material implements HotReloadableFmat {
     _vertexShaders = shaders;
   }
 
-  // 16 zero bytes (a std140 vec4) for the VertexKeepAlive block below.
-  static final ByteData _zeroKeepAlive = ByteData(16);
+  // Both shader keep-alive blocks always read one zero vec4. Keep it in an
+  // immutable device buffer instead of uploading it again for every draw,
+  // shader stage, shadow cascade, and eye.
+  static final gpu.BufferView _zeroKeepAlive = gpu.BufferView(
+    gpu.gpuContext.createDeviceBufferWithCopy(ByteData(16)),
+    offsetInBytes: 0,
+    lengthInBytes: 16,
+  );
 
   @override
   void bindVertexStage(
@@ -390,7 +396,7 @@ class PreprocessedMaterial extends Material implements HotReloadableFmat {
     // replaces the outputs, and zero makes it invisible.
     pass.bindUniform(
       vertexShader.cachedUniformSlot('VertexKeepAlive'),
-      transientsBuffer.emplace(_zeroKeepAlive),
+      _zeroKeepAlive,
     );
   }
 
@@ -548,7 +554,7 @@ class PreprocessedMaterial extends Material implements HotReloadableFmat {
         _usesPlanarReflection) {
       pass.bindUniform(
         shader.cachedUniformSlot('FragmentKeepAlive'),
-        transientsBuffer.emplace(_zeroKeepAlive),
+        _zeroKeepAlive,
       );
     }
   }

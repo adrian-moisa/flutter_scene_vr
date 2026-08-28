@@ -10,6 +10,13 @@ import 'package:flutter_scene/src/texture/texture_registry.dart'
     show gpuTextureBytes;
 import 'package:flutter_scene/src/render/render_stats.dart';
 
+/// Called after a final color-writing pass has finished recording and
+/// immediately before its command buffer is submitted.
+// This associates a surface lease with its last write; it is not a GPU fence.
+// Only the engine's later completion notification lets a native owner reuse
+// or release a borrowed target.
+typedef FinalCommandBufferCallback = void Function(gpu.CommandBuffer buffer);
+
 /// A typed scratch store passed between [RenderPass]es within a single
 /// frame.
 ///
@@ -130,6 +137,7 @@ class ObservedTexturePool extends TransientTexturePool {
 
   @override
   int get residentBytes => _inner.residentBytes;
+  TransientTextureLease retain(gpu.Texture texture) => _inner.retain(texture);
 }
 
 /// Description of a transient GPU texture requested from a
@@ -257,6 +265,17 @@ class TransientTexturePool {
 
   final int framesInFlight;
   final Map<TransientTextureDescriptor, List<gpu.Texture?>> _rings = {};
+  // Neither the table nor its entries keep abandoned histories alive. A scene
+  // can disappear while an application-owned RenderTexture pool survives it.
+  final Expando<List<WeakReference<TransientTextureLease>>> _retained =
+      Expando();
+  // At most one released replacement per descriptor. A one-slot pool with
+  // temporal history alternates between its ring texture and this spare instead
+  // of allocating on every frame. Weak origin metadata never owns a texture.
+  final Map<TransientTextureDescriptor, gpu.Texture> _releasedReplacements = {};
+  final Expando<({TransientTextureDescriptor descriptor, int generation})>
+  _displaced = Expando();
+  int _generation = 0;
   int _frame = 0;
 
   /// Textures every [TransientTexturePool] has created. For tests that check
@@ -278,9 +297,15 @@ class TransientTexturePool {
       () => List<gpu.Texture?>.filled(framesInFlight, null),
     );
     var texture = ring[_frame];
-    if (texture == null) {
-      texturesCreated++;
-      texture = gpu.gpuContext.createTexture(
+    if (texture == null || _isRetained(texture)) {
+      if (texture != null) {
+        _displaced[texture] = (descriptor: descriptor, generation: _generation);
+      }
+      texture = _releasedReplacements.remove(descriptor);
+      // A caller may have retained a previously released texture again.
+      if (texture != null && _isRetained(texture)) texture = null;
+      if (texture == null) texturesCreated++;
+      texture ??= gpu.gpuContext.createTexture(
         descriptor.storageMode,
         descriptor.width,
         descriptor.height,
@@ -289,26 +314,63 @@ class TransientTexturePool {
         enableRenderTargetUsage: true,
         enableShaderReadUsage: descriptor.enableShaderReadUsage,
       );
+      _displaced[texture] = null;
       ring[_frame] = texture;
     }
     return texture;
   }
 
-  /// Releases all cached textures. The next [acquire] for any descriptor
-  /// reallocates. Call when the output size changes so stale-sized
-  /// textures aren't kept alive, or to give the memory back under pressure.
+  /// Prevents this texture from being acquired as a writable attachment until
+  /// the lease is released. Temporal histories use this to keep a prior view's
+  /// color without copying it or depending on a particular ring size/index.
   ///
-  /// Every texture this pool handed out is invalid afterwards, so call it
-  /// between frames. Work already submitted is unaffected.
-  void clear() {
-    for (final ring in _rings.values) {
-      for (final texture in ring) {
-        if (texture != null) gpu.gpuHost.releaseTexture(texture);
-      }
-    }
-    _rings.clear();
+  /// Release only after every pass sampling the history has submitted. On the
+  /// renderer's single submission queue, later writes then follow those reads.
+  TransientTextureLease retain(gpu.Texture texture) {
+    final lease = TransientTextureLease._(this, texture);
+    (_retained[texture] ??= []).add(WeakReference(lease));
+    return lease;
   }
 
+  bool _isRetained(gpu.Texture texture) {
+    final leases = _retained[texture];
+    if (leases == null) return false;
+    leases.removeWhere((reference) => reference.target == null);
+    return leases.isNotEmpty;
+  }
+
+  void _release(TransientTextureLease lease) {
+    final leases = _retained[lease.texture];
+    if (leases == null) return;
+    leases.removeWhere(
+      (reference) =>
+          reference.target == null || identical(reference.target, lease),
+    );
+    if (leases.isEmpty) {
+      _retained[lease.texture] = null;
+      final origin = _displaced[lease.texture];
+      if (origin != null && origin.generation == _generation) {
+        _releasedReplacements[origin.descriptor] = lease.texture;
+      }
+    }
+  }
+
+  /// Drops all cached textures. The next [acquire] for any descriptor
+  /// reallocates. Call when the output size changes so stale-sized
+  /// textures aren't kept alive.
+  void clear() {
+    // A history lease may outlive a resize.
+    // Its later release must not put the old allocation into the new pool.
+    _generation++;
+    for (final texture in {
+      ..._rings.values.expand((ring) => ring.nonNulls),
+      ..._releasedReplacements.values,
+    }) {
+      if (!_isRetained(texture)) gpu.gpuHost.releaseTexture(texture);
+    }
+    _rings.clear();
+    _releasedReplacements.clear();
+  }
   /// Resident bytes of every texture the pool holds, summed across mip chains.
   int get residentBytes {
     var bytes = 0;
@@ -324,6 +386,20 @@ class TransientTexturePool {
   @internal
   int get heldTextureCount =>
       _rings.values.fold(0, (count, ring) => count + ring.nonNulls.length);
+}
+
+/// An explicit read lease on a pooled texture, independent of frame cadence.
+/// Clearing/resizing the pool does not invalidate a live lease.
+class TransientTextureLease {
+  TransientTextureLease._(this._pool, this.texture);
+
+  TransientTexturePool? _pool;
+  final gpu.Texture texture;
+
+  void release() {
+    _pool?._release(this);
+    _pool = null;
+  }
 }
 
 /// Per-frame state handed to every [RenderGraphPass] when the graph

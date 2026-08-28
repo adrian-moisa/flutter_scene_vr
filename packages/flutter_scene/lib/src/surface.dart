@@ -13,7 +13,7 @@ import 'package:flutter_scene/src/render/render_graph.dart';
 /// never share a render target within a frame. View 0 is the single-view
 /// default.
 ///
-/// Every view, every frame, the renderer asks the surface for that view's
+/// For Canvas views, every frame the renderer asks the surface for that view's
 /// next swapchain color texture via [getNextSwapchainColorTexture]; the
 /// surface rotates through a small ring per view so the GPU isn't asked to
 /// overwrite one the compositor is still reading. The tone-mapping pass
@@ -49,12 +49,22 @@ class Surface {
   static final List<WeakReference<Surface>> _live = [];
 
   final List<_ViewSurface> _views = [];
+  // Index identifies the eye across frames, not the rotating native texture.
+  // Keep target ordering stable so each eye retains its own attachment history.
+  final List<_ExternalViewSurface> _externalViews = [];
 
   _ViewSurface _view(int index) {
     while (_views.length <= index) {
       _views.add(_ViewSurface());
     }
     return _views[index];
+  }
+
+  _ExternalViewSurface _externalView(int index) {
+    while (_externalViews.length <= index) {
+      _externalViews.add(_ExternalViewSurface());
+    }
+    return _externalViews[index];
   }
 
   /// The transient texture pool for view [viewIndex] (the intermediate
@@ -64,6 +74,14 @@ class Surface {
   @internal
   TransientTexturePool transientTexturePool([int viewIndex = 0]) =>
       _view(viewIndex).pool;
+
+  /// Advances and returns the transient attachment pool for an externally
+  /// targeted view at [size]. External targets have their own per-view pools,
+  /// so their depth/MSAA/post-process attachments never alias another view's
+  /// attachments or disturb the ordinary canvas swapchain rings.
+  @internal
+  TransientTexturePool prepareExternalFrame(Size size, [int viewIndex = 0]) =>
+      _externalView(viewIndex).beginFrame(size);
 
   /// Returns the next 8-bit swapchain color texture for view [viewIndex] at
   /// [size], advancing that view's frame. A new [size] gets its own ring and
@@ -290,5 +308,23 @@ class _ViewSurface {
     }
     _sizes.clear();
     _lastIssued = null;
+  }
+}
+
+/// One direct-target view's renderer-owned transient attachments.
+class _ExternalViewSurface {
+  final TransientTexturePool pool = TransientTexturePool(
+    framesInFlight: Surface._maxFramesInFlight,
+  );
+
+  Size _previousSize = const Size(0, 0);
+
+  TransientTexturePool beginFrame(Size size) {
+    pool.beginFrame();
+    if (size != _previousSize) {
+      pool.clear();
+      _previousSize = size;
+    }
+    return pool;
   }
 }

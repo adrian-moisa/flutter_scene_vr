@@ -99,6 +99,14 @@ abstract base class GpuContext {
     int mipLevelCount = 1,
   });
   bool supportsTextureCompression(TextureCompressionFamily family);
+  GpuImageSurface createImageSurface(
+    int width,
+    int height, {
+    PixelFormat? format,
+  }) => throw UnsupportedError(
+    'GpuImageSurface is not available on the Flutter Scene web backends.',
+  );
+
   CommandBuffer createCommandBuffer();
   RenderPipeline createRenderPipeline(
     Shader vertexShader,
@@ -226,6 +234,37 @@ abstract base class ShaderLibrary {
   }
 
   Shader? operator [](String shaderName);
+}
+
+/// Presentation result placeholder for source compatibility with native
+/// Flutter GPU surface hosts.
+enum GpuPresentStatus { success, suboptimal, outOfDate }
+
+/// A platform-owned presentable frame.
+///
+/// Web Flutter Scene does not currently vend surface frames, but declaring the
+/// contract keeps direct-target application code conditionally compilable. A
+/// host implementation must consume each frame exactly once via [present] or
+/// [discard].
+abstract interface class GpuSurfaceFrame {
+  Texture get colorTexture;
+
+  GpuPresentStatus present(CommandBuffer commandBuffer);
+
+  void discard();
+}
+
+/// Native Flutter GPU image surfaces are not available on web backends.
+final class GpuImageSurface {
+  GpuImageSurface._();
+
+  GpuSurfaceFrame acquireNextFrame() => throw UnsupportedError(
+    'GpuImageSurface is not available on the Flutter Scene web backends.',
+  );
+
+  ui.Image? get currentImage => throw UnsupportedError(
+    'GpuImageSurface is not available on the Flutter Scene web backends.',
+  );
 }
 
 /// An offscreen drawing surface whose frames reach Flutter as images.

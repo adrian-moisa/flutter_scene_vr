@@ -50,6 +50,10 @@ class _ExampleFsceneStreamState extends State<ExampleFsceneStream> {
     } else {
       for (final placeholder in _placeholders) {
         await loadSubtree(placeholder, load: (_) async => _prefab);
+        if (!mounted) {
+          unloadSubtree(placeholder);
+          return;
+        }
       }
     }
     if (!mounted) return;

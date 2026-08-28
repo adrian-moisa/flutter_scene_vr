@@ -346,15 +346,18 @@ class _DepthPrepassEncoder {
   }) : _writeNormals = writeNormals,
        _translucentPatch = translucentPatch,
        _primaryView = primaryView {
+    // Reversing only clip depth does not reverse screen-space winding.
+    _cameraWindingFlipped =
+        (_cameraTransform.determinant() < 0) != _raster.reversed;
     _renderPass.setDepthWriteEnable(true);
     _renderPass.setColorBlendEnable(false);
     _renderPass.setDepthCompareOperation(_raster.nearerOrEqual);
     // Winding and culling are matched to each material per draw in [submit]
-    // (winding follows the node/instance parity, culling follows the material's
-    // own mode), so the same faces the color pass draws contribute depth.
-    _renderPass.setWindingOrder(gpu.WindingOrder.clockwise);
+    // (winding combines camera and node/instance parity, culling follows the
+    // material's own mode), so the color and depth passes draw the same faces.
+    _setWindingOrder(gpu.WindingOrder.clockwise);
     // The camera axes are constant across the pass. Pack them once and
-    // rebind per draw (clearBindings drops the binding between draws). The
+    // rebind after pipeline changes (clearBindings drops the binding). The
     // normal-writing path also needs the right/up axes to rotate the world
     // normal into view space; the depth-only path uses just forward.
     if (writeNormals) {
@@ -381,6 +384,7 @@ class _DepthPrepassEncoder {
   // The view-projection draws rasterize with (see DepthRaster).
   final Matrix4 _cameraTransform;
   final DepthRaster _raster;
+  late final bool _cameraWindingFlipped;
   final Vector3 _cameraPosition;
   final Vector3 _cameraForward;
   final int _layerMask;
@@ -394,6 +398,19 @@ class _DepthPrepassEncoder {
   // depth-carrying set drawn by [TranslucentDepthPatchPass].
   final bool _translucentPatch;
   late final Float32List _depthInfo;
+  gpu.BufferView? _constantDepthInfoView;
+
+  /// Applies the same reflected-camera correction as the color encoder,
+  /// including the packed-instance and translucent-depth paths.
+  void _setWindingOrder(gpu.WindingOrder windingOrder) {
+    _renderPass.setWindingOrder(
+      _cameraWindingFlipped
+          ? (windingOrder == gpu.WindingOrder.clockwise
+                ? gpu.WindingOrder.counterClockwise
+                : gpu.WindingOrder.clockwise)
+          : windingOrder,
+    );
+  }
 
   static final gpu.Shader _depthShader =
       baseShaderLibrary['LinearDepthFragment']!;
@@ -566,7 +583,8 @@ class _DepthPrepassEncoder {
         _resolvePipeline(activeVertex, fragmentShader, vertexLayout, geometry);
     // A sliced warm-up builds this pipeline in a later slice.
     if (pipeline == null) return;
-    if (!identical(_boundPipeline, pipeline)) {
+    final pipelineChanged = !identical(_boundPipeline, pipeline);
+    if (pipelineChanged) {
       _renderPass.clearBindings();
       _renderPass.bindPipeline(pipeline);
       _boundPipeline = pipeline;
@@ -613,10 +631,19 @@ class _DepthPrepassEncoder {
         );
       }
     }
-    _renderPass.bindUniform(
-      fragmentShader.cachedUniformSlot(_infoBlockName),
-      _transientsBuffer.emplace(scratchBytesOf(_depthInfo)),
-    );
+    // The depth-only camera block is constant until the pass ends. Normals
+    // carry per-material roughness, so those draws still upload each time.
+    if (_writeNormals || pipelineChanged) {
+      final depthInfoView = _writeNormals
+          ? _transientsBuffer.emplace(scratchBytesOf(_depthInfo))
+          : (_constantDepthInfoView ??= _transientsBuffer.emplace(
+              scratchBytesOf(_depthInfo),
+            ));
+      _renderPass.bindUniform(
+        fragmentShader.cachedUniformSlot(_infoBlockName),
+        depthInfoView,
+      );
+    }
     if (surfaceShader != null) {
       item.material.bindDepthSurface(
         _renderPass,
@@ -687,7 +714,7 @@ class _DepthPrepassEncoder {
           _bindDraw(item.worldTransform * instanceTransform);
           final flip =
               item.windingFlipped != (instanceTransform.determinant() < 0);
-          _renderPass.setWindingOrder(
+          _setWindingOrder(
             flip
                 ? gpu.WindingOrder.counterClockwise
                 : gpu.WindingOrder.clockwise,
@@ -711,7 +738,7 @@ class _DepthPrepassEncoder {
           slot: instanceSlot,
         );
         if (flipped != null) {
-          _renderPass.setWindingOrder(
+          _setWindingOrder(
             flipped
                 ? gpu.WindingOrder.counterClockwise
                 : gpu.WindingOrder.clockwise,
@@ -790,7 +817,7 @@ class _DepthPrepassEncoder {
         );
       }
     }
-    _renderPass.setWindingOrder(
+    _setWindingOrder(
       item.windingFlipped
           ? gpu.WindingOrder.counterClockwise
           : gpu.WindingOrder.clockwise,
@@ -872,7 +899,7 @@ class _DepthPrepassEncoder {
       } else {
         bindInstanceTransforms(_renderPass, packed.ccw, slot: instanceSlot);
       }
-      _renderPass.setWindingOrder(gpu.WindingOrder.clockwise);
+      _setWindingOrder(gpu.WindingOrder.clockwise);
       drawOrRejectPipeline(
         _renderPass,
         geometry,
@@ -886,7 +913,7 @@ class _DepthPrepassEncoder {
       } else {
         bindInstanceTransforms(_renderPass, packed.cw, slot: instanceSlot);
       }
-      _renderPass.setWindingOrder(gpu.WindingOrder.counterClockwise);
+      _setWindingOrder(gpu.WindingOrder.counterClockwise);
       drawOrRejectPipeline(
         _renderPass,
         geometry,

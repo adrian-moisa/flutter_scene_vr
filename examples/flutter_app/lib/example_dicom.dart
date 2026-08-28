@@ -89,13 +89,15 @@ class _ExampleDicomState extends State<ExampleDicom> {
   Future<void> _load() async {
     try {
       final material = await loadFmatMaterial('assets/dicom_volume.fmat');
+      if (!mounted) return;
       final atlas = await loadReferenceVolume(
         onStatus: (m) {
           if (mounted) setState(() => _status = m);
         },
       );
 
-      if (mounted) setState(() => _status = 'Uploading to GPU...');
+      if (!mounted) return;
+      setState(() => _status = 'Uploading to GPU...');
 
       // Upload the normalized scalar volume as a single-channel float atlas.
       final texture = gpu.gpuContext.createTexture(

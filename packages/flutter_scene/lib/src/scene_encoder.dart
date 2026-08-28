@@ -755,6 +755,10 @@ base class SceneEncoder {
     _pixelScale = pixelWorldScaleOf(_camera, _dimensions);
     _cameraTransform =
         cameraTransform ?? rasterViewTransformOf(_camera, _dimensions);
+    // Depth reversal negates the full determinant without changing screen
+    // winding. Remove that parity change from the raster transform.
+    _cameraWindingFlipped =
+        (_cameraTransform.determinant() < 0) != _raster.reversed;
     _displayReferredCameraTransform = displayReferredCameraTransform;
     frustum = cullingFrustumOf(_camera, _dimensions);
     // A degenerate projection has no screen-size metric, so LOD nodes draw
@@ -846,6 +850,8 @@ base class SceneEncoder {
   // The view-projection draws rasterize with (see DepthRaster); culling uses
   // [frustum], built from the standard mapping.
   late final Matrix4 _cameraTransform;
+  // Camera reflection is independent of node/instance parity and depth order.
+  late final bool _cameraWindingFlipped;
 
   // The transform the display-referred layer draws with, when it differs from
   // the scene's. Under TAA the scene is jittered and resolved temporally, but
@@ -1520,6 +1526,12 @@ base class SceneEncoder {
   }
 
   void _setWindingOrder(gpu.WindingOrder windingOrder) {
+    if (_cameraWindingFlipped) {
+      windingOrder = windingOrder == gpu.WindingOrder.clockwise
+          ? gpu.WindingOrder.counterClockwise
+          : gpu.WindingOrder.clockwise;
+    }
+
     if (_boundWindingOrder == windingOrder) return;
     _renderPass.setWindingOrder(windingOrder);
     _boundWindingOrder = windingOrder;

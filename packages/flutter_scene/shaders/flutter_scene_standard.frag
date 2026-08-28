@@ -22,6 +22,12 @@ uniform sampler2D normal_texture;
 uniform sampler2D occlusion_texture;
 
 uniform TextureTransforms {
+  // Rotation.w padding carries built-in white-placeholder flags. The base
+  // flag rides in normal_rotation.w because base_color_rotation.w already
+  // gates UV transforms. The other flags use their own rotation.w. Zero
+  // preserves texture sampling for callers that do not provide these flags.
+  // A known white sample needs no UV work, texture read, or sRGB decoding;
+  // material and vertex factors still apply, including their alpha.
   highp vec4 base_color_transform;
   highp vec4 base_color_rotation;
   highp vec4 metallic_roughness_transform;
@@ -46,14 +52,18 @@ void Surface(inout MaterialInputs material) {
   // transform reproduces the raw UV bit-exactly, so the uniform branch only
   // skips work.
   bool transformed_uvs = texture_transforms.base_color_rotation.w > 0.5;
-  highp vec2 base_color_uv = transformed_uvs
-      ? MaterialTextureUv(
-            texture_transforms.base_color_transform,
-            texture_transforms.base_color_rotation)
-      : GetUV0();
-  vec4 base_color_srgb = texture(base_color_texture, base_color_uv);
-  vec3 albedo = SRGBToLinear(base_color_srgb.rgb) * vertex_color.rgb *
-                frag_info.color.rgb;
+  vec4 base_color_srgb = vec4(1.0);
+  vec3 base_color_linear = vec3(1.0);
+  if (texture_transforms.normal_rotation.w < 0.5) {
+    highp vec2 base_color_uv = transformed_uvs
+        ? MaterialTextureUv(
+              texture_transforms.base_color_transform,
+              texture_transforms.base_color_rotation)
+        : GetUV0();
+    base_color_srgb = texture(base_color_texture, base_color_uv);
+    base_color_linear = SRGBToLinear(base_color_srgb.rgb);
+  }
+  vec3 albedo = base_color_linear * vertex_color.rgb * frag_info.color.rgb;
   float alpha = base_color_srgb.a * vertex_color.a * frag_info.color.a;
   // MASK alpha mode renders fully opaque (glTF treats MASK output as binary).
   // The cutout itself comes from the main pass's coverage pre-draw, so this
@@ -78,44 +88,47 @@ void Surface(inout MaterialInputs material) {
   }
   material.normal = normal;
 
-  highp vec2 metallic_roughness_uv = transformed_uvs
-      ? MaterialTextureUv(
-            texture_transforms.metallic_roughness_transform,
-            texture_transforms.metallic_roughness_rotation)
-      : GetUV0();
-  vec4 metallic_roughness =
-      texture(metallic_roughness_texture, metallic_roughness_uv);
+  vec4 metallic_roughness = vec4(1.0);
+  if (texture_transforms.metallic_roughness_rotation.w < 0.5) {
+    highp vec2 metallic_roughness_uv = transformed_uvs
+        ? MaterialTextureUv(
+              texture_transforms.metallic_roughness_transform,
+              texture_transforms.metallic_roughness_rotation)
+        : GetUV0();
+    metallic_roughness =
+        texture(metallic_roughness_texture, metallic_roughness_uv);
+  }
   material.metallic = clamp(metallic_roughness.b * frag_info.metallic_factor,
                             0.0, 1.0);
   material.roughness =
       clamp(metallic_roughness.g * frag_info.roughness_factor, kMinRoughness,
             1.0);
 
-  highp vec2 occlusion_uv = transformed_uvs
-      ? MaterialTextureUv(
-            texture_transforms.occlusion_transform,
-            texture_transforms.occlusion_rotation)
-      : GetUV0();
-  // A zero strength (also what a material without an occlusion texture
-  // packs) leaves the occlusion at 1, so the read is skipped.
   float occlusion = 1.0;
-  if (frag_info.occlusion_strength != 0.0) {
+  if (frag_info.occlusion_strength != 0.0 &&
+      texture_transforms.occlusion_rotation.w < 0.5) {
+    highp vec2 occlusion_uv = transformed_uvs
+        ? MaterialTextureUv(
+              texture_transforms.occlusion_transform,
+              texture_transforms.occlusion_rotation)
+        : GetUV0();
     occlusion = texture(occlusion_texture, occlusion_uv).r;
   }
   material.occlusion = 1.0 - (1.0 - occlusion) * frag_info.occlusion_strength;
 
-  highp vec2 emissive_uv = transformed_uvs
-      ? MaterialTextureUv(
-            texture_transforms.emissive_transform,
-            texture_transforms.emissive_rotation)
-      : GetUV0();
-  // Most materials emit nothing, so they skip the read and the sRGB decode.
   material.emissive = vec3(0.0);
   vec3 emissive_scale = frag_info.emissive_factor.rgb * frag_info.emissive_factor.a;
   if (dot(abs(emissive_scale), vec3(1.0)) > 0.0) {
-    material.emissive =
-        SRGBToLinear(texture(emissive_texture, emissive_uv).rgb) *
-        emissive_scale;
+    vec3 emissive_linear = vec3(1.0);
+    if (texture_transforms.emissive_rotation.w < 0.5) {
+      highp vec2 emissive_uv = transformed_uvs
+          ? MaterialTextureUv(
+                texture_transforms.emissive_transform,
+                texture_transforms.emissive_rotation)
+          : GetUV0();
+      emissive_linear = SRGBToLinear(texture(emissive_texture, emissive_uv).rgb);
+    }
+    material.emissive = emissive_linear * emissive_scale;
   }
 
   PrepareMaterial(material);

@@ -26,6 +26,8 @@ export 'src/gpu/gpu.dart'
         ShaderLibrary,
         loadShaderLibraryAsync,
         Texture,
+        GpuPresentStatus,
+        GpuSurfaceFrame,
         SamplerOptions,
         MinMagFilter,
         MipFilter,

@@ -818,6 +818,7 @@ class _ExampleShapesState extends State<ExampleShapes> {
               height: 118,
               child: SceneView(
                 _previewScene,
+                key: const ValueKey('gallery-shape-preview'),
                 cameraBuilder: (elapsed) {
                   final r = _previewRadius(_kind, _params[_kind]!);
                   final distance = r * 3.4 + 0.6;

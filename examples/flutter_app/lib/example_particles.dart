@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 // Particle emitter demo. Reaches two internal helpers (the icosphere builder
 // and the noise field) directly.
 // ignore_for_file: implementation_imports
@@ -378,8 +379,8 @@ class ExampleParticlesState extends State<ExampleParticles> {
   void initState() {
     super.initState();
     // The shared-settings side of this example's look (dim moonlight, ambient
-    // occlusion, the warm grade) lives in main.dart's settingsDefaults entry.
-    _load();
+    // occlusion, the warm grade) lives in example_registry.dart's settingsDefaults entry.
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {
@@ -388,6 +389,7 @@ class ExampleParticlesState extends State<ExampleParticles> {
     // the image-based ambient stays near black and a faint blue directional
     // stands in for skylight.
     _skySource = await loadFmatSky('assets/night_sky.fmat');
+    if (!mounted) return;
     scene.skybox = Skybox(_skySource);
     scene.environmentIntensity = 0.06;
     scene.directionalLight = DirectionalLight(
@@ -403,57 +405,77 @@ class ExampleParticlesState extends State<ExampleParticles> {
     final flameAtlas = GpuTextureSource(
       await gpuTextureFromImage(await bakeFlameAtlas()),
     );
+    if (!mounted) return;
     final smokeAtlas = GpuTextureSource(
       await gpuTextureFromImage(await bakeSmokeAtlas()),
     );
+    if (!mounted) return;
     final dot = GpuTextureSource(
       await gpuTextureFromImage(await bakeSoftDot()),
     );
+    if (!mounted) return;
     final groundTexture = GpuTextureSource(
       await gpuTextureFromImage(await _bakeGroundTexture()),
     );
+    if (!mounted) return;
     final groundNormal = GpuTextureSource(
       await gpuTextureFromImage(await _bakeGroundNormal()),
     );
+    if (!mounted) return;
     final groundRough = GpuTextureSource(
       await gpuTextureFromImage(await _bakeGroundRoughness()),
     );
+    if (!mounted) return;
     final stoneTexture = GpuTextureSource(
       await gpuTextureFromImage(await _bakeStoneTexture()),
     );
+    if (!mounted) return;
     _barkAlbedo = GpuTextureSource(
       await gpuTextureFromImage(await _bakeBarkAlbedo()),
     );
+    if (!mounted) return;
     _barkNormal = GpuTextureSource(
       await gpuTextureFromImage(await _bakeBarkNormal()),
     );
+    if (!mounted) return;
     _barkRough = GpuTextureSource(
       await gpuTextureFromImage(await _bakeBarkRoughness()),
     );
+    if (!mounted) return;
     _emberCracks = GpuTextureSource(
       await gpuTextureFromImage(await _bakeEmberCracks()),
     );
+    if (!mounted) return;
     _logRings = GpuTextureSource(
       await gpuTextureFromImage(await _bakeLogRings()),
     );
+    if (!mounted) return;
     _splitWood = GpuTextureSource(
       await gpuTextureFromImage(await _bakeSplitWood()),
     );
+    if (!mounted) return;
     _leafCard = GpuTextureSource(
       await gpuTextureFromImage(await _bakeLeafCard()),
     );
+    if (!mounted) return;
     _singleLeaf = GpuTextureSource(
       await gpuTextureFromImage(await _bakeSingleLeaf()),
     );
+    if (!mounted) return;
     _grassMaterial = await loadFmatMaterial('assets/campfire_grass.fmat');
+    if (!mounted) return;
     // One material per background mesh, each a separate instance so they can
     // carry their own textures while sharing the bend.
     _forestFloorMaterial = await loadFmatMaterial(
       'assets/campfire_curved.fmat',
     );
+    if (!mounted) return;
     _forestBark = await loadFmatMaterial('assets/campfire_curved.fmat');
+    if (!mounted) return;
     _forestLeaf = await loadFmatMaterial('assets/campfire_curved.fmat');
+    if (!mounted) return;
     _heatMaterial = await loadFmatMaterial('assets/campfire_heat.fmat');
+    if (!mounted) return;
 
     _buildCampsite(groundTexture, groundNormal, groundRough, stoneTexture);
 

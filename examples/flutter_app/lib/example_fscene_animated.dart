@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart' show compute;
@@ -30,7 +31,7 @@ class _ExampleFsceneAnimatedState extends State<ExampleFsceneAnimated> {
   @override
   void initState() {
     super.initState();
-    _load();
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {

@@ -182,6 +182,11 @@ class VelocityPass extends RenderGraphPass {
         ? cullingFrustum(_currentViewProjection)
         : cullingFrustumOf(camera, _dimensions);
 
+    // The supplied view-projection is the raster transform; reversing depth
+    // changes its determinant but leaves screen-space winding unchanged.
+    final cameraWindingFlipped =
+        (_currentViewProjection.determinant() < 0) != raster.reversed;
+
     void submitItem(RenderItem item) {
       if (!item.drawsColor) return;
       if ((item.layers & _layerMask) == 0) return;
@@ -208,6 +213,13 @@ class VelocityPass extends RenderGraphPass {
 
       renderPass.clearBindings();
       renderPass.bindPipeline(pipeline);
+      // Match the color/depth pass for a reflected eye camera and mirrored
+      // objects; camera parity is not part of the object's world transform.
+      renderPass.setWindingOrder(
+        item.windingFlipped != cameraWindingFlipped
+            ? gpu.WindingOrder.counterClockwise
+            : gpu.WindingOrder.clockwise,
+      );
       renderPass.setPrimitiveType(item.geometry.primitiveType);
       // Match the prepass offset, or the equal test drops layered surfaces.
       setCurrentDrawDepthOffset(

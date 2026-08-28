@@ -39,6 +39,11 @@ base class GpuContext {
     int mipLevelCount = 1,
   }) => _stub();
   bool supportsTextureCompression(TextureCompressionFamily family) => _stub();
+  GpuImageSurface createImageSurface(
+    int width,
+    int height, {
+    PixelFormat? format,
+  }) => _stub();
   CommandBuffer createCommandBuffer() => _stub();
   RenderPipeline createRenderPipeline(
     Shader vertexShader,

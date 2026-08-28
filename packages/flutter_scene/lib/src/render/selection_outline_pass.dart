@@ -114,13 +114,16 @@ class SelectionOutlinePass extends RenderGraphPass {
     required gpu.Texture output,
     required ui.Size dimensions,
     required double thickness,
+    FinalCommandBufferCallback? beforeSubmit,
   }) : _output = output,
        _dimensions = dimensions,
-       _thickness = thickness;
+       _thickness = thickness,
+       _beforeSubmit = beforeSubmit;
 
   final gpu.Texture _output;
   final ui.Size _dimensions;
   final double _thickness;
+  final FinalCommandBufferCallback? _beforeSubmit;
 
   static final gpu.Shader _vertexShader =
       baseShaderLibrary['FullscreenVertex']!;
@@ -192,6 +195,7 @@ class SelectionOutlinePass extends RenderGraphPass {
     );
 
     drawCompat(renderPass, 6);
+    _beforeSubmit?.call(commandBuffer);
     rendererSubmissions.submit(commandBuffer);
 
     context.blackboard.set(kDisplayColorBlackboardKey, _output);

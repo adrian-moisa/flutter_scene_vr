@@ -26,12 +26,14 @@ class PostEffectPass extends RenderGraphPass {
     required gpu.Texture output,
     required ui.Size dimensions,
     required double time,
+    FinalCommandBufferCallback? beforeSubmit,
   }) : _effect = effect,
        _inputKey = inputKey,
        _outputKey = outputKey,
        _output = output,
        _dimensions = dimensions,
-       _time = time;
+       _time = time,
+       _beforeSubmit = beforeSubmit;
 
   final PostEffect _effect;
   final String _inputKey;
@@ -39,6 +41,7 @@ class PostEffectPass extends RenderGraphPass {
   final gpu.Texture _output;
   final ui.Size _dimensions;
   final double _time;
+  final FinalCommandBufferCallback? _beforeSubmit;
 
   static final gpu.Shader _vertexShader =
       baseShaderLibrary['FullscreenVertex']!;
@@ -107,6 +110,7 @@ class PostEffectPass extends RenderGraphPass {
     _effect.bindUniforms(renderPass, context.transientsBuffer);
 
     drawCompat(renderPass, 6);
+    _beforeSubmit?.call(commandBuffer);
     rendererSubmissions.submit(commandBuffer);
 
     context.blackboard.set(_outputKey, _output);

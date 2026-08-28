@@ -204,6 +204,7 @@ class ExampleSplatsState extends State<ExampleSplats> {
         final component = SplatComponent(
           await GaussianSplats.fromAsset(config.asset),
         );
+        if (!mounted) return;
         _sources[config] = component;
         _sourceNodes[config] = _placeCapture(component, config);
         final bounds = component.splats.bounds;
@@ -214,6 +215,7 @@ class ExampleSplatsState extends State<ExampleSplats> {
                 12.0,
               );
       } catch (_) {
+        if (!mounted) return;
         // Asset absent (tool/fetch_splat_asset.sh not run); hide the source.
       }
     }

@@ -59,13 +59,16 @@ class SmaaPass extends RenderGraphPass {
     required gpu.Texture output,
     required ui.Size dimensions,
     SmaaSettings? settings,
+    FinalCommandBufferCallback? beforeSubmit,
   }) : _output = output,
        _dimensions = dimensions,
-       _settings = settings ?? SmaaSettings();
+       _settings = settings ?? SmaaSettings(),
+       _beforeSubmit = beforeSubmit;
 
   final gpu.Texture _output;
   final ui.Size _dimensions;
   final SmaaSettings _settings;
+  final FinalCommandBufferCallback? _beforeSubmit;
 
   static final gpu.Shader _vertexShader =
       baseShaderLibrary['FullscreenVertex']!;
@@ -326,6 +329,7 @@ class SmaaPass extends RenderGraphPass {
         infoView,
       );
       drawCompat(renderPass, 6);
+      _beforeSubmit?.call(commandBuffer);
       rendererSubmissions.submit(commandBuffer);
     }
 

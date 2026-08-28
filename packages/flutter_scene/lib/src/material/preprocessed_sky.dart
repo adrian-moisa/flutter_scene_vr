@@ -41,8 +41,13 @@ class PreprocessedSky extends ShaderSkySource implements HotReloadableFmat {
   /// The sky's parameters, set by name. See [MaterialParameters].
   final MaterialParameters parameters;
 
-  // 16 zero bytes (a std140 vec4) for the FragmentKeepAlive block.
-  static final ByteData _zeroKeepAlive = ByteData(16);
+  // FragmentKeepAlive always reads one zero vec4. A persistent device buffer
+  // avoids uploading the same bytes for each eye and environment capture.
+  static final gpu.BufferView _zeroKeepAlive = gpu.BufferView(
+    gpu.gpuContext.createDeviceBufferWithCopy(ByteData(16)),
+    offsetInBytes: 0,
+    lengthInBytes: 16,
+  );
 
   @override
   void updateFromMetadata(
@@ -73,7 +78,7 @@ class PreprocessedSky extends ShaderSkySource implements HotReloadableFmat {
     if (parameters.hasAnyParameters || useEnvironment) {
       pass.bindUniform(
         shader.cachedUniformSlot('FragmentKeepAlive'),
-        transientsBuffer.emplace(_zeroKeepAlive),
+        _zeroKeepAlive,
       );
     }
     // A `requires: [environment]` sky samples the prefiltered radiance

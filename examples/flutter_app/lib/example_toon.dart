@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 // Toon-shader example: loads a glTF model and renders it through a
 // caller-authored fragment shader bound by name.
 //
@@ -52,7 +53,7 @@ class _ExampleToonState extends State<ExampleToon> {
   @override
   void initState() {
     super.initState();
-    _load();
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {

@@ -1,0 +1,10 @@
+{
+  "name": "Flutter Scene OpenXR",
+  "short_name": "Scene OpenXR",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#02040A",
+  "theme_color": "#02040A",
+  "description": "Minimal Flutter Scene OpenXR demo",
+  "orientation": "landscape"
+}

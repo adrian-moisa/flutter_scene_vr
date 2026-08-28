@@ -125,6 +125,14 @@ float SampleCascade(int cascade, int count, highp vec3 proj, highp float box) {
   // atlas-x by the total tile count. Spot count 0 leaves this at 1 / cascades.
   highp float inv_count = 1.0 / (float(count) + frag_info.spot_shadow_params.x);
 
+#ifdef FLUTTER_SCENE_HARD_SHADOWS
+  vec2 cuv = clamp(uv, vec2(frag_info.shadow_texel_size),
+                   vec2(1.0 - frag_info.shadow_texel_size));
+  vec2 atlas_uv = vec2((float(cascade) + cuv.x) * inv_count, 1.0 - cuv.y);
+  float caster_depth = texture(shadow_map, atlas_uv).r;
+  float shadow = receiver_depth <= caster_depth ? 1.0 : 0.0;
+#else
+
   // Select the tap positions without duplicating the texture samples in both
   // branches. Duplicating both kernels here expands to 33 samples per cascade
   // in the generated GLES source even though the choice is uniform.
@@ -181,7 +189,7 @@ float SampleCascade(int cascade, int count, highp vec3 proj, highp float box) {
   // penumbra), which cuts the shadow-map reads on texture-rate-bound GPUs.
   // PCSS keeps its own path, since its blocker search sizes the kernel.
   bool settled = false;
-  if (filter_index < 1.5 || filter_index > 2.5) {
+  if (filter_index < 1.5 || (filter_index > 2.5 && filter_index < 3.5)) {
     float probe =
         ShadowTap(vec2(0.0), ca, sa, radius, uv, cascade, inv_count,
                   receiver_depth) +
@@ -196,7 +204,12 @@ float SampleCascade(int cascade, int count, highp vec3 proj, highp float box) {
     settled = probe < 0.5 || probe > 4.5;
     shadow = probe * 0.2;
   }
-  if (settled) {
+  if (filter_index > 3.5) {
+    // Materials without a compiled hard-shadow variant still honor the filter.
+    // Keep this fallback even though standard PBR selects the specialized shader.
+    shadow = ShadowTap(vec2(0.0), 1.0, 0.0, 0.0, uv, cascade, inv_count,
+                       receiver_depth);
+  } else if (settled) {
     // The probes agree, so the kernel would too.
   } else if (filter_index > 2.5) {
     // 4-tap bilinear PCF: 4 taps x 4 texels = 16 samples total (matching the
@@ -222,6 +235,7 @@ float SampleCascade(int cascade, int count, highp vec3 proj, highp float box) {
     }
     shadow = lit / float(sample_count);
   }
+#endif
 
   // Only the last cascade has a real outer edge (inner cascades hand
   // off to the next), so fade just it back to lit at the boundary.
@@ -247,7 +261,7 @@ float CascadeBlendWeight(highp vec2 uv, highp float margin, highp float band) {
   return band > 0.0 ? ramp.x * ramp.y : 1.0;
 }
 
-// Soft cascaded-shadow lookup. Returns 1.0 (lit) .. 0.0 (fully
+// Cascaded-shadow lookup. Returns 1.0 (lit) .. 0.0 (fully
 // shadowed). `world_pos` and `n` are world-space; `n` is the geometric
 // normal. Walks the cascades highest-resolution first, taking from each the
 // weight its tile still has room for.

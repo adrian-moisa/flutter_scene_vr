@@ -183,6 +183,7 @@ class RenderPassContext {
     this._viewLayerMask,
     this._passKey,
     this._time,
+    this._beforeSubmit,
   );
 
   final RenderGraphContext _context;
@@ -201,8 +202,10 @@ class RenderPassContext {
   final int _viewLayerMask;
   final String _passKey;
   final double _time;
+  final FinalCommandBufferCallback? _beforeSubmit;
   bool _wrote = false;
   int _drawCounter = 0;
+  final List<gpu.CommandBuffer> _colorCommandBuffers = [];
 
   static final gpu.Shader _vertexShader =
       baseShaderLibrary['FullscreenVertex']!;
@@ -304,11 +307,11 @@ class RenderPassContext {
       f[11] = projection.offsetY;
       f[15] = projection.orthographicFlag;
     }
-    // The same view basis the depth prepass encodes against (eye at origin
-    // looking down +forward), so a reconstructed view point maps to world.
+    // Match the eye basis used by color and depth, including reflected XR views.
     final forward = camera.forward.normalized();
-    final right = camera.up.cross(forward)..normalize();
-    final up = forward.cross(right)..normalize();
+    final view = camera.getViewMatrix();
+    final right = view.getRow(0).xyz..normalize();
+    final up = view.getRow(1).xyz..normalize();
     f[4] = right.x;
     f[5] = right.y;
     f[6] = right.z;
@@ -412,8 +415,10 @@ class RenderPassContext {
   /// declares a `PostFrameInfo` block (resolution / texel_size / time), the
   /// same contract as a `PostEffect`.
   ///
-  /// Call at most once per pass; for multiple chained effects use multiple
-  /// [CustomRenderPass]es. At an HDR stage the shader must output linear HDR
+  /// Calls are submitted in invocation order, and downstream passes receive
+  /// the result of the last call. For effects that need to sample one
+  /// another's output, prefer multiple [CustomRenderPass]es so each call gets
+  /// its own destination. At an HDR stage the shader must output linear HDR
   /// premultiplied by alpha (the material-shader contract).
   void applyShader(
     gpu.Shader fragmentShader, {
@@ -468,9 +473,44 @@ class RenderPassContext {
     }
 
     drawCompat(renderPass, 6);
-    rendererSubmissions.submit(commandBuffer);
-
+    _colorCommandBuffers.add(commandBuffer);
     _wrote = true;
+  }
+
+  // A final user pass is allowed to do no color work (for example, it may
+  // inspect inputs or only build an auxiliary mask). Caller-supplied final
+  // targets still need one definitive write/submission, so preserve the
+  // incoming chain with a full-screen copy in that case.
+  void _copyCurrentColor() {
+    final input = _context.blackboard.require<gpu.Texture>(_chainKey);
+    final copyShader = baseShaderLibrary['CopyFragment']!;
+    final commandBuffer = gpu.gpuContext.createCommandBuffer();
+    final renderPass = commandBuffer.createRenderPass(
+      gpu.RenderTarget.singleColor(gpu.ColorAttachment(texture: _destination)),
+    );
+    renderPass.bindPipeline(resolvePipeline(_vertexShader, copyShader));
+    bindVertexBufferCompat(renderPass, _quadView, 6);
+    renderPass.bindTexture(
+      copyShader.getUniformSlot('source_texture'),
+      input,
+      sampler: _linearClamp,
+    );
+    drawCompat(renderPass, 6);
+    _colorCommandBuffers.add(commandBuffer);
+    _wrote = true;
+  }
+
+  void _submitColorWrites() {
+    // Several applyShader calls overwrite the same destination.
+    // Only the last write can carry presentation; auxiliary masks cannot.
+    for (var i = 0; i < _colorCommandBuffers.length; i++) {
+      final commandBuffer = _colorCommandBuffers[i];
+      if (i == _colorCommandBuffers.length - 1) {
+        _beforeSubmit?.call(commandBuffer);
+      }
+      rendererSubmissions.submit(commandBuffer);
+    }
+    _colorCommandBuffers.clear();
   }
 }
 
@@ -486,6 +526,7 @@ class UserRenderGraphPass extends RenderGraphPass {
     required int viewLayerMask,
     required int passIndex,
     required double time,
+    FinalCommandBufferCallback? beforeSubmit,
   }) : _pass = pass,
        _camera = camera,
        _dimensions = dimensions,
@@ -493,7 +534,8 @@ class UserRenderGraphPass extends RenderGraphPass {
        _renderScene = renderScene,
        _viewLayerMask = viewLayerMask,
        _passIndex = passIndex,
-       _time = time;
+       _time = time,
+       _beforeSubmit = beforeSubmit;
 
   final CustomRenderPass _pass;
   final Camera _camera;
@@ -503,6 +545,7 @@ class UserRenderGraphPass extends RenderGraphPass {
   final int _viewLayerMask;
   final int _passIndex;
   final double _time;
+  final FinalCommandBufferCallback? _beforeSubmit;
 
   @override
   String get name => _pass.name;
@@ -519,8 +562,16 @@ class UserRenderGraphPass extends RenderGraphPass {
       _viewLayerMask,
       '${_pass.stage.name}_$_passIndex',
       _time,
+      _beforeSubmit,
     );
     _pass.execute(passContext);
+    if (!passContext._wrote && _beforeSubmit != null) {
+      passContext._copyCurrentColor();
+    }
+    // On deferred backends, wait for user code to return before submitting
+    // final-target writes, so a later applyShader error can still discard them.
+    // WebGL executes draws during recording and cannot roll them back here.
+    passContext._submitColorWrites();
     if (passContext._wrote) {
       context.blackboard.set(passContext._chainKey, _destination);
     }

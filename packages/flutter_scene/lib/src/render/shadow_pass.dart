@@ -61,13 +61,16 @@ bool debugDisableSharedShadowTiles = false;
 /// The casters are drawn once, from [cameraPosition] (the screen view's
 /// camera), so a mirror or render texture shows the shadows the screen view
 /// sees. The first view to render its [ShadowPass] fills this and later
-/// views publish the same atlas. Only frames without directional cascades
-/// share, since cascades fit each view.
+/// views publish the same atlas. Directional cascades share only when a
+/// stereo group explicitly fits them to the union of all consuming eyes.
 // TODO(shared-shadow-opt-out): let a texture view that needs shadows drawn
 // from its own camera (a distant monitor view, say) render its own tiles.
 class SharedShadowAtlas {
   /// Creates an empty atlas whose casters are drawn from [cameraPosition].
-  SharedShadowAtlas(this.cameraPosition);
+  SharedShadowAtlas(this.cameraPosition, {this.sharedDirectionalCascades = false});
+
+  /// True only for stereo cascades fitted to the union of all sharing eyes.
+  final bool sharedDirectionalCascades;
 
   /// The camera position every sharing view's casters are drawn from.
   final Vector3 cameraPosition;
@@ -116,10 +119,15 @@ class ShadowPass extends RenderGraphPass {
     ByteData? shadowUniform,
     ShadowCachePlan? cachePlan,
     SharedShadowAtlas? shared,
-  }) : assert(shared == null || cascades.isEmpty),
+  }) : assert(
+         shared == null || cascades.isEmpty || shared.sharedDirectionalCascades,
+       ),
        _renderScene = renderScene,
        _cascades = cascades,
-       _cascadeReceiverPlanes = cascadeReceiverPlanes,
+       // Per-eye receiver planes cannot reject casters for a union-of-eyes atlas.
+       _cascadeReceiverPlanes = shared?.sharedDirectionalCascades == true
+           ? const []
+           : cascadeReceiverPlanes,
        _tileResolution = tileResolution,
        _casterFaces = casterFaces,
        _casterChannelMask = casterChannelMask,
@@ -186,7 +194,7 @@ class ShadowPass extends RenderGraphPass {
   );
 
   @override
-  String get name => 'ShadowPass';
+  String get name => _shared?.atlas != null ? 'ReuseShadowAtlas' : 'ShadowPass';
 
   @override
   void execute(RenderGraphContext context) {
@@ -197,6 +205,10 @@ class ShadowPass extends RenderGraphPass {
       final info = shared!.spotInfo;
       if (info != null) {
         context.blackboard.set(kSpotShadowInfoBlackboardKey, info);
+      }
+      final shadowUniform = _shadowUniform;
+      if (shadowUniform != null) {
+        context.blackboard.set(kShadowUniformBlackboardKey, shadowUniform);
       }
       return;
     }
