@@ -424,6 +424,7 @@ base class SceneEncoder {
        _transientsBuffer = transientsBuffer {
     currentSceneEncoderViewport = _dimensions;
     _cameraTransform = cameraTransform ?? _camera.getViewTransform(_dimensions);
+    _cameraWindingFlipped = _cameraTransform.determinant() < 0;
     frustum = Frustum.matrix(_cameraTransform);
     // The screen-size LOD metric is perspective-specific; with any other
     // projection LOD nodes draw their highest-detail level.
@@ -446,6 +447,11 @@ base class SceneEncoder {
   gpu.RenderPass _renderPass;
   final TransientWriter _transientsBuffer;
   late final Matrix4 _cameraTransform;
+  // Flutter Scene's positive-forward, zero-to-one projections preserve
+  // orientation. A reflected eye view (or projection axis) reverses it.
+  // Keep this separate from model/instance parity: camera reflection must
+  // not alter cached world transforms, tangent normals, or shadow casters.
+  late final bool _cameraWindingFlipped;
   // The camera's vertical field of view in radians, or null for a
   // non-perspective camera (which disables screen-size LOD).
   late final double? _lodFovRadiansY;
@@ -769,6 +775,12 @@ base class SceneEncoder {
   }
 
   void _setWindingOrder(gpu.WindingOrder windingOrder) {
+    if (_cameraWindingFlipped) {
+      windingOrder = windingOrder == gpu.WindingOrder.clockwise
+          ? gpu.WindingOrder.counterClockwise
+          : gpu.WindingOrder.clockwise;
+    }
+
     if (_boundWindingOrder == windingOrder) return;
     _renderPass.setWindingOrder(windingOrder);
     _boundWindingOrder = windingOrder;

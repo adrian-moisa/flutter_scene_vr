@@ -1,0 +1,28 @@
+name: flutter_scene_openxr
+description: OpenXR stereo presentation for Flutter Scene on Android headsets.
+version: 0.1.0
+publish_to: none
+
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+  flutter: '>=3.47.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_gpu:
+    sdk: flutter
+  flutter_scene: ^0.23.0
+  vector_math: ^2.1.4
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: dev.bdero.flutter_scene_openxr
+        pluginClass: FlutterSceneOpenXrPlugin

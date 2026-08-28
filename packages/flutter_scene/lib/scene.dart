@@ -253,6 +253,12 @@ export 'src/render/selection_outline_pass.dart' show HighlightStyle;
 export 'src/render_texture.dart'
     show RenderTexture, RenderTextureSampling, RenderTextureUpdate;
 export 'src/render_view.dart' show RenderView;
+export 'src/scene_color_target.dart'
+    show
+        SceneColorTarget,
+        SurfaceFrameSceneColorTarget,
+        TargetedRenderView,
+        TextureSceneColorTarget;
 export 'src/math_extensions.dart' show QuaternionSlerp, Vector3Lerp;
 export 'src/mesh.dart' show Mesh, MeshPrimitive;
 export 'src/node.dart' show Node;
@@ -334,3 +340,5 @@ export 'src/widgets/scene_view.dart'
         SceneView,
         SceneViewsBuilder;
 export 'src/tone_mapping.dart' show ToneMappingMode;
+
+export 'src/widgets/scene_view_presentation.dart';

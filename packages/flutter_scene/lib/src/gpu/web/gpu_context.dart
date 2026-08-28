@@ -174,6 +174,14 @@ base class GpuContext {
 
   CommandBuffer createCommandBuffer() => CommandBuffer._(this);
 
+  GpuImageSurface createImageSurface(
+    int width,
+    int height, {
+    PixelFormat? format,
+  }) => throw UnsupportedError(
+    'GpuImageSurface is not available on the Flutter Scene WebGL backend.',
+  );
+
   // Linked-program cache. Program linking is expensive and some callers
   // create a pipeline per draw per frame; native flutter_gpu absorbs that,
   // so the shim must too. Keyed by shader identity plus compile generation,

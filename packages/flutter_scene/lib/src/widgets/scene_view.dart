@@ -1,3 +1,4 @@
+import 'scene_view_presentation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart'
     show PipelineOwner, RenderCustomPaint, SemanticsBuilderCallback;
@@ -298,6 +299,7 @@ class _SceneViewState extends State<SceneView>
     Duration.zero,
   );
   Ticker? _ticker;
+  SceneViewPresentation? _presentation;
   Duration _lastTick = Duration.zero;
 
   // Zero-based clock: the ticker's raw elapsed at the moment the scene is
@@ -335,9 +337,7 @@ class _SceneViewState extends State<SceneView>
     _scene.renderScene.semanticsComponentsChanged.addListener(
       _onSemanticsChanged,
     );
-    if (widget.autoTick) {
-      _ticker = createTicker(_onTick)..start();
-    }
+
     if (kDebugMode) {
       // Repaint after extension-driven asset refreshes (an editor's
       // ext.flutter_scene.reloadScene has no reassemble to trigger one).
@@ -349,6 +349,33 @@ class _SceneViewState extends State<SceneView>
     if (_gated) {
       _startRevealWatch();
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _presentation = SceneViewPresentation.maybeOf(context);
+    _syncPresentationClock();
+  }
+
+  void _syncPresentationClock() {
+    // Resolve the inherited host before starting a ticker.
+    // A hidden flat ticker beside the host clock would advance simulation twice.
+    final flatTick = _presentation?.present == null && widget.autoTick;
+    if (!flatTick) {
+      _ticker?.dispose();
+      _ticker = null;
+    } else {
+      _ticker ??= createTicker(_onTick)..start();
+    }
+  }
+
+  void _externalTick(Duration elapsed, double deltaSeconds) {
+    if (!mounted || !_revealed) return;
+    // Advance example callbacks without asking Flutter to repaint a flat view.
+    // The host renders the shared scene once these updates are applied.
+    _elapsed.value = elapsed;
+    widget.onTick?.call(elapsed, deltaSeconds);
   }
 
   void _onAssetsRefreshed() => _repaint.notify();
@@ -394,8 +421,7 @@ class _SceneViewState extends State<SceneView>
   void didUpdateWidget(SceneView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.autoTick != oldWidget.autoTick) {
-      _ticker?.dispose();
-      _ticker = widget.autoTick ? (createTicker(_onTick)..start()) : null;
+      _syncPresentationClock();
     }
     final oldScene = oldWidget.scene ?? _ownedScene;
     if (widget.scene == null) {
@@ -414,6 +440,7 @@ class _SceneViewState extends State<SceneView>
       _ownedDefaultEnvironment = null;
     }
     if (!identical(_scene, oldScene)) {
+      if (oldScene != null) _presentation?.onDetach?.call(oldScene);
       oldScene?.renderScene.semanticsComponentsChanged.removeListener(
         _onSemanticsChanged,
       );
@@ -447,31 +474,48 @@ class _SceneViewState extends State<SceneView>
   // is never drawn.
   Future<void> _startRevealWatch() async {
     final generation = ++_revealGeneration;
-    final start = DateTime.now();
-    await Scene.initializeStaticResources();
-    if (!mounted || generation != _revealGeneration) return;
-    await widget.loading?.ready;
-    if (!mounted || generation != _revealGeneration) return;
-    // Wait a frame so declarative children have built and registered their
-    // loads, then wait for those loads, so gated views (and warm-up) cover
-    // SceneModel content too.
-    await SchedulerBinding.instance.endOfFrame;
-    if (!mounted || generation != _revealGeneration) return;
-    await _childLoads.ready;
-    if (!mounted || generation != _revealGeneration) return;
-    // Compile the pipelines the first frame needs while the loading widget is
-    // still up, so the reveal frame does not stall.
-    if (widget.warmUp) {
-      await _scene.warmUp(_warmUpViews());
+    try {
+      final start = DateTime.now();
+      await Scene.initializeStaticResources();
       if (!mounted || generation != _revealGeneration) return;
+      await widget.loading?.ready;
+      if (!mounted || generation != _revealGeneration) return;
+      // Wait a frame so declarative children have built and registered their
+      // loads, then wait for those loads, so gated views (and warm-up) cover
+      // SceneModel content too.
+      await SchedulerBinding.instance.endOfFrame;
+      if (!mounted || generation != _revealGeneration) return;
+      await _childLoads.ready;
+      if (!mounted || generation != _revealGeneration) return;
+      if (_presentation != null) {
+        final failures = [
+          ...?widget.loading?.failures,
+          ..._childLoads.failures,
+        ];
+        if (failures.isNotEmpty) {
+          throw StateError('Scene resources failed: ${failures.join("; ")}');
+        }
+      }
+      // Compile the pipelines the first frame needs while the loading widget is
+      // still up, so the reveal frame does not stall.
+      // warmUp renders through Canvas; a direct host must warm its own targets
+      // rather than start a hidden flat render while its eye leases are active.
+      if (widget.warmUp && _presentation?.present == null) {
+        await _scene.warmUp(_warmUpViews());
+        if (!mounted || generation != _revealGeneration) return;
+      }
+      final remaining =
+          widget.revealMinDuration - DateTime.now().difference(start);
+      if (remaining > Duration.zero) {
+        await Future<void>.delayed(remaining);
+      }
+      if (!mounted || generation != _revealGeneration) return;
+      setState(() => _revealed = true);
+    } catch (error, stack) {
+      if (mounted && generation == _revealGeneration) {
+        Error.throwWithStackTrace(error, stack);
+      }
     }
-    final remaining =
-        widget.revealMinDuration - DateTime.now().difference(start);
-    if (remaining > Duration.zero) {
-      await Future<void>.delayed(remaining);
-    }
-    if (!mounted || generation != _revealGeneration) return;
-    setState(() => _revealed = true);
   }
 
   // The views to warm up, matching what the first rendered frame will use.
@@ -492,19 +536,43 @@ class _SceneViewState extends State<SceneView>
     _lastTick = revealElapsed;
     _elapsed.value = revealElapsed;
     widget.onTick?.call(revealElapsed, deltaSeconds);
+    _presentation?.onTick?.call(widget, _scene, revealElapsed, deltaSeconds);
     _repaint.notify();
   }
 
   Camera? _lastBuiltCamera;
 
-  Camera _cameraForFrame() => _lastBuiltCamera = SceneView.resolveCamera(
-    _elapsed.value,
-    camera: widget.camera,
-    cameraBuilder: widget.cameraBuilder,
-    sceneCamera: _scene.camera,
-  );
+  Camera _cameraForFrame() {
+    final authored = SceneView.resolveCamera(
+      _elapsed.value,
+      camera: widget.camera,
+      cameraBuilder: widget.cameraBuilder,
+      sceneCamera: _scene.camera,
+    );
+    return _lastBuiltCamera =
+        _presentation?.camera?.call(widget, _scene, authored) ?? authored;
+  }
 
-  List<RenderView> _viewsForFrame() => widget.viewsBuilder!(_elapsed.value);
+  List<RenderView> _viewsForFrame() {
+    final views = widget.viewsBuilder!(_elapsed.value);
+    final override = _presentation?.camera;
+    if (override == null) return views;
+    final primary = views.indexWhere((view) => view.target == null);
+    if (primary < 0) return views;
+    final authored = views[primary];
+    // Preserve authored RenderViews, auxiliary targets and secondary cameras.
+    return [...views]
+      ..[primary] = RenderView(
+        camera: override(widget, _scene, authored.camera),
+        viewport: authored.viewport,
+        layerMask: authored.layerMask,
+        order: authored.order,
+        antiAliasingMode: authored.antiAliasingMode,
+        renderScale: authored.renderScale,
+        filterQuality: authored.filterQuality,
+        cullingPlanes: authored.cullingPlanes,
+      );
+  }
 
   // ----- automatic widget input -----
 
@@ -612,18 +680,30 @@ class _SceneViewState extends State<SceneView>
     _ticker?.dispose();
     _repaint.dispose();
     _elapsed.dispose();
+    _childLoads.dispose();
+    _presentation?.onDetach?.call(_scene);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     _sceneSemantics.ambientTextDirection = Directionality.maybeOf(context);
-    Widget view = LayoutBuilder(
-      builder: (context, constraints) {
-        _viewSize = constraints.biggest;
-        return _buildView(context);
-      },
-    );
+    final presentation = _presentation?.present;
+    Widget view = presentation != null
+        ? presentation(context, widget, _scene, _externalTick, _revealed)
+        : LayoutBuilder(
+            builder: (context, constraints) {
+              _viewSize = constraints.biggest;
+              final viewport = _buildView(context);
+              return _presentation?.decorateView?.call(
+                    context,
+                    widget,
+                    _scene,
+                    viewport,
+                  ) ??
+                  viewport;
+            },
+          );
     if (widget.children.isNotEmpty) {
       // The declarative children mount outside the reveal gate so their
       // content populates (and loads) while a loading widget is up. The host

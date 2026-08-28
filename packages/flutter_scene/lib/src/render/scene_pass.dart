@@ -276,8 +276,11 @@ class ScenePass extends RenderGraphPass {
     }
     final camera = _camera;
     final cameraForward = camera.forward.normalized();
-    final cameraRight = camera.up.cross(cameraForward)..normalize();
-    final cameraUp = cameraForward.cross(cameraRight)..normalize();
+    // Preserve the actual eye basis, including reflected direct-XR views.
+    // Reconstructing right with a cross product forces the legacy handedness.
+    final cameraView = camera.getViewMatrix();
+    final cameraRight = cameraView.getRow(0).xyz..normalize();
+    final cameraUp = cameraView.getRow(1).xyz..normalize();
     final projection = camera.projection;
     final tanHalfFovY = projection is PerspectiveProjection
         ? math.tan(projection.fovRadiansY / 2.0)

@@ -73,18 +73,14 @@ Future<Uint8List> bytesFromAsset(
 /// {@category Assets and loading}
 Future<ui.Image> imageFromBytes(Uint8List bytes, {int? maxWidth}) async {
   final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-  final ui.Codec codec;
-  ui.ImageDescriptor? descriptor;
-  if (maxWidth == null) {
-    codec = await ui.instantiateImageCodecFromBuffer(buffer);
-  } else {
-    descriptor = await ui.ImageDescriptor.encoded(buffer);
-    codec = await descriptor.instantiateCodec(
-      targetWidth: descriptor.width <= maxWidth ? null : maxWidth,
-    );
-  }
+  // Let Flutter compare the target with the intrinsic width inside its codec
+  // callback. Reading ImageDescriptor.width directly is unsupported on web.
+  final codec = await ui.instantiateImageCodecFromBuffer(
+    buffer,
+    targetWidth: maxWidth,
+    allowUpscaling: false,
+  );
   final frame = await codec.getNextFrame();
-  descriptor?.dispose();
   return frame.image;
 }
 

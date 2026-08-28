@@ -105,6 +105,8 @@ class PhysicallyBasedMaterial extends Material {
       cubeName: 'StandardCubeFragment',
       noShadowName: 'StandardNoShadowFragment',
       noShadowCubeName: 'StandardNoShadowCubeFragment',
+      hardShadowName: 'StandardHardShadowFragment',
+      hardShadowCubeName: 'StandardHardShadowCubeFragment',
     );
   }
 
@@ -1122,6 +1124,8 @@ class PhysicallyBasedMaterial extends Material {
       noShadowCubeName: lightmapped
           ? 'StandardLightmapNoShadowCubeFragment'
           : 'StandardNoShadowCubeFragment',
+      hardShadowName: lightmapped ? null : 'StandardHardShadowFragment',
+      hardShadowCubeName: lightmapped ? null : 'StandardHardShadowCubeFragment',
     );
   }
 
@@ -1668,6 +1672,15 @@ class PhysicallyBasedMaterial extends Material {
         emissiveTextureTexCoord != 0 ||
         occlusionTextureTexCoord != 0;
     textureTransforms[7] = transformedUvs ? 1.0 : 0.0;
+    // Empty slots bind a known white placeholder. Tell the standard shader
+    // it can use that value directly, skipping texture reads and sRGB decode.
+    // Zero preserves sampling; real sources (including a RenderTexture with
+    // no completed frame yet) keep their original binding and UV behavior.
+    // The base flag uses normal_rotation.w because its own padding gates UVs.
+    textureTransforms[15] = metallicRoughnessTexture == null ? 1.0 : 0.0;
+    textureTransforms[23] = baseColorTexture == null ? 1.0 : 0.0;
+    textureTransforms[31] = emissiveTexture == null ? 1.0 : 0.0;
+    textureTransforms[39] = occlusionTexture == null ? 1.0 : 0.0;
     pass.bindUniform(
       shader.getUniformSlot('TextureTransforms'),
       transientsBuffer.emplace(ByteData.sublistView(textureTransforms)),

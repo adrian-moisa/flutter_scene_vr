@@ -7,8 +7,6 @@ import 'package:flutter_scene/src/gpu/render_pass_compat.dart';
 
 import 'package:flutter_scene/src/ambient_occlusion.dart';
 import 'package:flutter_scene/src/render/depth_prepass.dart';
-import 'package:flutter_scene/src/render/scene_pass.dart'
-    show kSceneColorBlackboardKey;
 import 'package:flutter_scene/src/render/render_graph.dart';
 import 'package:flutter_scene/src/shaders.dart';
 import 'package:flutter_scene/src/render/frame_transients.dart';
@@ -162,8 +160,9 @@ class SsaoPass extends RenderGraphPass {
   static final gpu.Shader _downsampleShader =
       baseShaderLibrary['DepthDownsampleFragment']!;
 
-  // The depth mip chain matches the fp32 linear-depth prepass format.
-  static const gpu.PixelFormat _depthFormat = gpu.PixelFormat.r32g32b32a32Float;
+  // AO mip samples need only depth, even when the prepass also stored normals
+  // for another effect. Keep fp32 precision without allocating unused channels.
+  static const gpu.PixelFormat _depthFormat = gpu.PixelFormat.r32Float;
 
   @override
   String get name => 'SsaoPass';
@@ -478,63 +477,5 @@ class SsaoBlurPass extends RenderGraphPass {
     );
 
     context.blackboard.set(kSsaoTextureBlackboardKey, blurred);
-  }
-}
-
-/// Copies the frame's scene color into a scene-owned history texture for
-/// next frame's indirect-light gather. The target is owned by the caller
-/// (not the transient pool), so holding it across frames is safe.
-class SceneColorHistoryPass extends RenderGraphPass {
-  SceneColorHistoryPass({required this.current, required this.store});
-
-  /// The history texture from previous frames, reused when sizes match.
-  final gpu.Texture? current;
-
-  /// Receives the texture holding this frame's color.
-  final void Function(gpu.Texture) store;
-
-  static final gpu.Shader _vertexShader =
-      baseShaderLibrary['FullscreenVertex']!;
-  static final gpu.Shader _copyShader = baseShaderLibrary['CopyFragment']!;
-
-  @override
-  String get name => 'SceneColorHistoryPass';
-
-  @override
-  void execute(RenderGraphContext context) {
-    final source = context.blackboard.get<gpu.Texture>(
-      kSceneColorBlackboardKey,
-    );
-    if (source == null) {
-      return;
-    }
-    var target = current;
-    if (target == null ||
-        target.width != source.width ||
-        target.height != source.height) {
-      target = gpu.gpuContext.createTexture(
-        gpu.StorageMode.devicePrivate,
-        source.width,
-        source.height,
-        format: gpu.PixelFormat.r16g16b16a16Float,
-        enableRenderTargetUsage: true,
-        enableShaderReadUsage: true,
-      );
-    }
-    final commandBuffer = gpu.gpuContext.createCommandBuffer();
-    final renderPass = commandBuffer.createRenderPass(
-      gpu.RenderTarget.singleColor(gpu.ColorAttachment(texture: target)),
-    );
-    renderPass.bindPipeline(resolvePipeline(_vertexShader, _copyShader));
-    renderPass.setColorBlendEnable(false);
-    bindVertexBufferCompat(renderPass, _fullscreenQuad(), 6);
-    renderPass.bindTexture(
-      _copyShader.getUniformSlot('source_texture'),
-      source,
-      sampler: _nearestClamp,
-    );
-    drawCompat(renderPass, 6);
-    rendererSubmissions.submit(commandBuffer);
-    store(target);
   }
 }

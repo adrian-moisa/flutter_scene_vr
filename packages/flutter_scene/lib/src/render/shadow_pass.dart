@@ -25,6 +25,13 @@ const String kShadowMapBlackboardKey = 'directional_shadow_map';
 /// light color). A depth-aware custom pass reads it to sample the shadow map.
 const String kShadowUniformBlackboardKey = 'shadow_uniform';
 
+/// A frame-local atlas produced by the first eye and read by later eyes.
+/// Its texture belongs to the producer's pool, which must not be advanced or
+/// reused until every view in the group has submitted its work.
+class SharedShadowAtlas {
+  gpu.Texture? texture;
+}
+
 /// Renders the scene's depth into one shared shadow map atlas and publishes it
 /// on the render-graph blackboard: the directional light's cascades first, then
 /// each shadow-casting spot's cone.
@@ -52,6 +59,7 @@ class ShadowPass extends RenderGraphPass {
     SpotShadowFrame? spotShadows,
     ByteData? shadowUniform,
     ShadowCachePlan? cachePlan,
+    SharedShadowAtlas? sharedAtlas,
   }) : _renderScene = renderScene,
        _cascades = cascades,
        _tileResolution = tileResolution,
@@ -60,7 +68,9 @@ class ShadowPass extends RenderGraphPass {
        _cameraPosition = cameraPosition,
        _spotShadows = spotShadows,
        _shadowUniform = shadowUniform,
-       _cachePlan = cachePlan;
+       _cachePlan = cachePlan,
+       _sharedAtlas = sharedAtlas,
+       _reusesSharedAtlas = sharedAtlas?.texture != null;
 
   final RenderScene _renderScene;
   final List<ShadowCascade> _cascades;
@@ -72,6 +82,8 @@ class ShadowPass extends RenderGraphPass {
   final int _casterChannelMask;
   final SpotShadowFrame? _spotShadows;
   final ShadowCachePlan? _cachePlan;
+  final SharedShadowAtlas? _sharedAtlas;
+  final bool _reusesSharedAtlas;
 
   // The packed PostShadowInfo block, published for depth-aware custom passes.
   final ByteData? _shadowUniform;
@@ -103,10 +115,15 @@ class ShadowPass extends RenderGraphPass {
   );
 
   @override
-  String get name => 'ShadowPass';
+  String get name => _reusesSharedAtlas ? 'ReuseShadowAtlas' : 'ShadowPass';
 
   @override
   void execute(RenderGraphContext context) {
+    final sharedTexture = _sharedAtlas?.texture;
+    if (sharedTexture != null) {
+      _publish(context, sharedTexture);
+      return;
+    }
     final plan = _cachePlan;
     if (plan != null) {
       _renderStaticTiles(context, plan);
@@ -228,6 +245,11 @@ class ShadowPass extends RenderGraphPass {
     }
 
     rendererSubmissions.submit(commandBuffer);
+    _sharedAtlas?.texture = color;
+    _publish(context, color);
+  }
+
+  void _publish(RenderGraphContext context, gpu.Texture color) {
     context.blackboard.set(kShadowMapBlackboardKey, color);
     final shadowUniform = _shadowUniform;
     if (shadowUniform != null) {

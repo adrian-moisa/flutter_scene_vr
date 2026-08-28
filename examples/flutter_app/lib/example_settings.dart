@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:ui' show FilterQuality;
 
+import 'package:flutter/foundation.dart';
+
 import 'package:flutter_scene/gpu.dart' as gpu;
 import 'package:flutter_scene/scene.dart';
 import 'package:vector_math/vector_math.dart';
@@ -143,6 +145,11 @@ class ExampleSettings {
   /// until the example shader bundle finishes loading.
   PostEffect? waveEffect;
 
+  // Keep choices on the settings instance, not the shared shader effect.
+  // Factory resets and saved Custom presets must not change each other's wave.
+  bool waveEnabled = false;
+  PostInsertion waveInsertion = PostInsertion.beforeTonemap;
+
   /// Amplitude of the custom wave effect.
   double waveAmplitude = 0.008;
 
@@ -150,6 +157,7 @@ class ExampleSettings {
   /// hand-tuned look to the log so it can be copied into code.
   String describe() =>
       '''
+  wave: enabled $waveEnabled, insertion $waveInsertion, amplitude $waveAmplitude
   directionalLightEnabled: $directionalLightEnabled
   shadowOnly: $shadowOnly
   lightAzimuthDegrees: $lightAzimuthDegrees
@@ -413,6 +421,8 @@ class ExampleSettings {
 
     final wave = waveEffect;
     if (wave != null) {
+      wave.enabled = waveEnabled;
+      wave.insertion = waveInsertion;
       wave.setUniformBlockFromFloats('WaveInfo', [
         waveAmplitude,
         24.0,
@@ -438,9 +448,19 @@ PostEffect? _waveEffect;
 /// Replaces [exampleSettings] with a fresh instance for a newly selected
 /// example, built by [defaults] when the example overrides the stock
 /// defaults, and returns it.
-ExampleSettings resetExampleSettings([ExampleSettings Function()? defaults]) {
+ExampleSettings resetExampleSettings([
+  ExampleSettings Function()? defaults,
+  String name = 'default',
+]) {
+  _activeExample = name;
+  _activeDefaults = defaults;
+  _galleryOverrideEnabled = false;
+  _resolutionOverrideEnabled = false;
   exampleSettings = (defaults?.call() ?? ExampleSettings())
     ..waveEffect = _waveEffect;
+  _settingsGeneration++;
+  // Notify only after the complete replacement is visible to listeners.
+  galleryGraphicsPreset.value = 'Authored';
   return exampleSettings;
 }
 
@@ -459,5 +479,88 @@ Future<void> loadExampleEffects() async {
       useFrameInfo: true,
     );
     exampleSettings.waveEffect = _waveEffect;
+  }
+}
+
+/// Custom keeps the entire settings instance, including all nested effect
+/// parameters, while standard presets receive fresh instances. It survives
+/// example/tab switches for this app session without shallow-copy aliasing.
+final galleryGraphicsPreset = ValueNotifier<String>('Authored');
+final Map<String, ExampleSettings> _customGraphics = {};
+final Map<String, bool> _customAppliesAllGraphics = {};
+String _activeExample = 'default';
+bool _galleryOverrideEnabled = false;
+bool _resolutionOverrideEnabled = false;
+ExampleSettings Function()? _activeDefaults;
+int _settingsGeneration = 0;
+
+// A settings panel may still be mounted between a selection and its next frame.
+// Async edits must belong to this generation before changing shared settings.
+int get gallerySettingsGeneration => _settingsGeneration;
+
+bool get hasCustomGraphics => _customGraphics.containsKey(_activeExample);
+
+void rememberCustomGraphics({bool resolutionOnly = false}) {
+  if (!resolutionOnly) _galleryOverrideEnabled = true;
+  _resolutionOverrideEnabled = true;
+  _customGraphics[_activeExample] = exampleSettings;
+  _customAppliesAllGraphics[_activeExample] = _galleryOverrideEnabled;
+  galleryGraphicsPreset.value = 'Custom';
+}
+
+ExampleSettings settingsForGraphicsPreset(String name) {
+  if (name == 'Custom') return _customGraphics[_activeExample]!;
+  final settings = (_activeDefaults?.call() ?? ExampleSettings())
+    ..waveEffect = _waveEffect;
+  if (name == 'Authored') return settings;
+  final level = ['Low', 'Medium', 'High', 'Ultra'].indexOf(name);
+  if (level < 0) throw ArgumentError.value(name, 'name');
+  settings
+    ..renderScale = [0.5, 0.75, 1.0, 1.0][level]
+    ..antiAliasingMode = level == 0
+        ? AntiAliasingMode.none
+        : AntiAliasingMode.fxaa
+    ..filterQuality = level < 2 ? FilterQuality.low : FilterQuality.medium
+    ..lightCastsShadow = level > 0
+    ..shadowMapResolution = [512, 512, 1024, 2048][level]
+    ..shadowCascadeCount = [1, 1, 2, 4][level]
+    ..contactShadows = level == 3;
+  settings.ambientOcclusion
+    ..enabled = level >= 2
+    ..halfResolution = level < 3
+    ..sampleCount = [4, 8, 16, 24][level];
+  settings.screenSpaceReflections
+    ..enabled = level == 3
+    ..resolutionScale = level == 3 ? 1.0 : 0.5
+    ..maxSteps = level == 3 ? 64 : 32;
+  settings.bloom.enabled = level >= 2;
+  // Keep lighting/color authored. Avoid forcing cinematic blur or fog onto
+  // unrelated examples; Low/Medium disable the expensive optional effects.
+  if (level < 2) {
+    settings.globalIllumination.enabled = false;
+    settings.godRays.enabled = false;
+    settings.depthOfField.enabled = false;
+  }
+  return settings;
+}
+
+void applyGraphicsPreset(String name, ExampleSettings settings) {
+  _galleryOverrideEnabled =
+      name != 'Custom' ||
+      _galleryOverrideEnabled ||
+      (_customAppliesAllGraphics[_activeExample] ?? true);
+  _resolutionOverrideEnabled = true;
+  exampleSettings = settings;
+  galleryGraphicsPreset.value = name;
+}
+
+/// Authored examples keep their own initialization until a global edit.
+/// Thereafter the shared settings also reach demos without their own applyTo.
+void applyGalleryGraphics(Scene scene) {
+  if (_galleryOverrideEnabled) {
+    exampleSettings.applyTo(scene);
+  } else if (_resolutionOverrideEnabled) {
+    // A resolution-only comparison must not rewrite an authored light rig.
+    scene.renderScale = exampleSettings.renderScale;
   }
 }

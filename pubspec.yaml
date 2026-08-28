@@ -16,11 +16,13 @@ workspace:
   - packages/flutter_scene_editor_core
   - packages/flutter_scene_editor
   - packages/flutter_scene_mcp
+  - packages/flutter_scene_openxr
   - examples/flutter_app
   - examples/flutter_gpu_shim_smoke
   - examples/smoke_render
   - examples/stress_bench
   - examples/editor_example
+  - examples/openxr_quest
   - apps/flutter_scene_editor_app
 
 # The smoke-render app has a data-assets lane (see examples/smoke_render/README.md).

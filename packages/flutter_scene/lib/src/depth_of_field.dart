@@ -101,8 +101,8 @@ class DepthOfField {
     return sensorDiameter / sensorHeight * heightPixels * 0.5 * blurScale;
   }
 
-  /// The number of gather taps for [quality] (a multiple of 2; the shader
-  /// consumes them as vec4 pairs).
+  /// The number of gather taps for [quality]. Each shader record carries a
+  /// tap position and its precomputed distance from the kernel center.
   @internal
   int get tapCount => switch (quality) {
     DepthOfFieldQuality.low => 16,
@@ -131,12 +131,18 @@ class DepthOfField {
     final cached = _gatherInfoCache;
     if (cached != null && _gatherInfoKey == key) return cached;
     final taps = buildKernel();
-    final info = Float32List(4 + 24 * 4);
-    info[0] = (tapCount / 2).floorToDouble();
+    final info = Float32List(4 + 48 * 4);
+    info[0] = tapCount.toDouble();
     info[1] = 1.0 / halfWidth;
     info[2] = 1.0 / halfHeight;
-    for (var i = 0; i < taps.length && i < 24 * 4; i++) {
-      info[4 + i] = taps[i];
+    for (var i = 0; i < tapCount; i++) {
+      final x = taps[i * 2];
+      final y = taps[i * 2 + 1];
+      info[4 + i * 4] = x;
+      info[5 + i * 4] = y;
+      // Kernel distance depends only on the aperture, not the pixel or eye.
+      // Compute it with the cached kernel instead of in every fragment.
+      info[6 + i * 4] = math.sqrt(x * x + y * y);
     }
     _gatherInfoCache = info;
     _gatherInfoKey = key;

@@ -43,6 +43,14 @@
     "type": "fragment",
     "file": "shaders/flutter_scene_standard_cube.frag"
   },
+  "StandardHardShadowFragment": {
+    "type": "fragment",
+    "file": "shaders/flutter_scene_standard_hard_shadow.frag"
+  },
+  "StandardHardShadowCubeFragment": {
+    "type": "fragment",
+    "file": "shaders/flutter_scene_standard_hard_shadow_cube.frag"
+  },
   "StandardLightmapFragment": {
     "type": "fragment",
     "file": "shaders/flutter_scene_standard_lightmap.frag"
@@ -162,6 +170,10 @@
   "ResolveFragment": {
     "type": "fragment",
     "file": "shaders/flutter_scene_resolve.frag"
+  },
+  "DisplayOutputFragment": {
+    "type": "fragment",
+    "file": "shaders/flutter_scene_display_output.frag"
   },
   "FxaaFragment": {
     "type": "fragment",

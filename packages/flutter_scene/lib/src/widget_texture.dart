@@ -593,10 +593,14 @@ class _RenderWidgetTexture extends RenderProxyBox {
   bool _wrapSupported = true;
 
   Future<void> _pumpCapture() async {
-    if (_captureInFlight) return;
+    // Diagnostic UI suspension must also stop manual/offscreen widget captures.
+    // Retain the last texture; the next framework paint resumes pending work.
+    if (_captureInFlight || !SchedulerBinding.instance.framesEnabled) return;
     _captureInFlight = true;
     try {
-      while (_pendingLayer != null && attached) {
+      while (_pendingLayer != null &&
+          attached &&
+          SchedulerBinding.instance.framesEnabled) {
         final layer = _pendingLayer!;
         _pendingLayer = null;
         _lastCaptureStart = DateTime.now();

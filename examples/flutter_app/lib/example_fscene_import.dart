@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -23,7 +24,7 @@ class _ExampleFsceneImportState extends State<ExampleFsceneImport> {
   @override
   void initState() {
     super.initState();
-    _load();
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {

@@ -1,9 +1,8 @@
-// Resolve pass: reads the linear HDR scene color (with premultiplied
-// alpha) and produces the display-referred swapchain image. In order it
-// applies chromatic aberration (at sample time), exposure, color grading,
-// a tone mapping operator, display encoding, then vignette and film grain.
-// Each effect is gated by a flag, so a disabled effect costs only a
-// branch and leaves the image unchanged.
+// Resolves linear HDR scene color into premultiplied, display-encoded sRGB.
+// Chromatic aberration shifts input samples; exposure and grading precede
+// tone mapping, followed by vignette, grain, sRGB encoding, and the display LUT.
+// Display-space effects can consume this image before DisplayOutputPass
+// adapts it to an external attachment's encoding.
 uniform ResolveInfo {
   float exposure;
   // 0 = PBR Neutral, 1 = ACES, 2 = Reinhard, 3 = linear, 4 = AgX.
@@ -201,8 +200,9 @@ void main() {
     mapped = max(mapped + n * resolve_info.grain_intensity, vec3(0.0));
   }
 
-  // The swapchain texture is a plain UNorm render target, so encode the
-  // resolved linear color before handing it to Texture.asImage().
+  // The display chain uses plain textures, so encode here for Flutter and
+  // display-space effects. DisplayOutputPass adapts sRGB final attachments
+  // only after the complete chain, avoiding a second hardware encode.
   mapped = LinearToSRGB(mapped);
 
   // Film-look LUT on the display-encoded color, matching how grading tools

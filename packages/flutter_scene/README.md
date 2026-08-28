@@ -1,3 +1,341 @@
+# Flutter Scene VR fork
+
+**Experimental VR fork of [bdero/flutter_scene](https://github.com/bdero/flutter_scene),
+maintained by [Adrian Moisa](https://github.com/adrian-moisa).** This repository
+works with the companion [flutter_vr engine fork](https://github.com/adrian-moisa/flutter_vr)
+to demonstrate Flutter Scene on the web and in native Meta Quest VR. The
+original Flutter Scene README is preserved below this addendum.
+
+Demo setup snapshot: **31 August 2026**.
+
+## Why we forked Flutter and Flutter Scene
+
+While adding VR to Visual Space, we wanted to keep one 3D engine across the
+ordinary application and the headset. Maintaining Flutter Scene on web/desktop
+and a second native world renderer on Quest would duplicate scene features,
+materials, lighting, shadows, and performance work.
+
+The first Flutter Scene VR path rendered stereo images through Flutter's
+compositor into an Android surface, then copied them into the headset's eye
+images. Flutter Scene was already drawing real GPU geometry; the extra cost
+was in presentation, buffering, copies, and synchronization.
+
+These two forks let Flutter Scene render directly into OpenXR-owned eye targets.
+The Flutter fork supplies generic external GPU surfaces and Android GLES
+interoperation. This fork supplies render-to-target support, stereo frame
+coordination, an OpenXR plugin, and the demo. OpenXR owns tracking, controllers,
+swapchains, and headset presentation. Flutter still supplies the widget panels.
+
+| Start the example on… | Scene rendering and presentation |
+| --- | --- |
+| **Chrome / web** | Flutter Scene's WebGL2 backend inside the ordinary Flutter gallery. No headset or native engine compilation is needed for this mode. |
+| **Meta Quest VR** | Flutter Scene → Flutter GPU/Impeller GLES → borrowed OpenXR eye images → native stereo presentation. Widgets use separate floating UI surfaces. Requires the custom compiled Flutter engine. |
+
+The native Quest world is not a web page or a flat screenshot placed in front
+of the user. Conversely, opening Chrome does not start a native OpenXR session
+or promise WebXR support. The shared renderer and examples have different
+platform presentation paths.
+
+## 1. Get the forks and select Flutter
+
+The documented engine-build host is **macOS on Apple Silicon**, targeting an
+**ARM64 Meta Quest 3**. Start with the
+[Flutter VR setup guide](https://github.com/adrian-moisa/flutter_vr#flutter-vr-fork):
+it covers SDK installation, `PATH`/IDE selection, engine dependencies, and the
+memory-conscious Android/host build. Keep stock Flutter installed separately.
+For a web-only first look, you can stop before compiling the native engine,
+but still use the fork SDK and matching Dart GPU source override below.
+
+Use the same directory layout as that guide:
+
+```text
+~/Projects/flutter_vr/         Flutter SDK and engine source
+~/Projects/depot_tools/        Engine dependency/build tools
+~/Projects/flutter_scene_vr/   This workspace and examples
+```
+
+```sh
+export FLUTTER_VR_ROOT="$HOME/Projects/flutter_vr"
+export PATH="$FLUTTER_VR_ROOT/bin:$PATH"
+git clone https://github.com/adrian-moisa/flutter_scene_vr.git "$HOME/Projects/flutter_scene_vr"
+cd "$HOME/Projects/flutter_scene_vr"
+```
+
+Use the fork revisions containing the VR changes. A stock Flutter installation
+meeting the upstream README's version requirement does not include the external
+surface API needed here. Do not switch channels or run `flutter upgrade` to
+resolve a missing VR API.
+
+### Select the matching `flutter_gpu` Dart sources
+
+At this workspace's root, create a local `pubspec_overrides.yaml` containing:
+
+```yaml
+dependency_overrides:
+  flutter_gpu:
+    path: /absolute/path/to/flutter_vr/engine/src/flutter/lib/gpu
+```
+
+Replace that path with the absolute path to your Flutter fork. YAML does not
+expand `$HOME`, `$FLUTTER_VR_ROOT`, or `~`. If the file already exists, merge
+the `flutter_gpu` entry into its existing `dependency_overrides`; do not replace
+other overrides. This machine-specific file is ignored by Git.
+
+```sh
+flutter pub get
+```
+
+This resolves the monorepo's local workspace packages. The native deployment
+helper also creates this override when absent, but does not overwrite or repair
+an existing file. Set it up here so the web gallery works before native deployment.
+**`--local-engine` selects native binaries; it does not select this Dart package.**
+
+The existing build hooks compile engine/gallery shaders, models, textures, and
+materials during the app build. You do not need to run a separate shader script
+or `flutter_scene:init` in these already configured examples. On the native
+local-engine path, the host output must contain `impellerc` and its sibling
+`shader_lib` directory. Do not copy in a compiler from an unrelated SDK.
+Rapier normally downloads a prebuilt physics library; a source fallback needs
+Rust/Cargo. Some gallery entries fetch external assets or require network access.
+
+## 2. Start the main gallery on web
+
+`examples/flutter_app` is the main example. Its platform scaffolding is generated
+locally; create the web files once in a fresh clone:
+
+```sh
+cd "$HOME/Projects/flutter_scene_vr/examples/flutter_app"
+flutter create . --platforms=web
+flutter run -d chrome
+```
+
+No local-engine flags are needed for Chrome. Select **VR** in the gallery to
+open the original VR demonstration scene as an ordinary interactive web scene;
+the gallery also contains the upstream material, lighting, model, and effect
+examples. Click the scene to focus it, drag to look around, use WASD or arrow
+keys to move, Shift to move faster, the wheel to dolly, and R to restore the
+authored camera. Overlays and settings keep their own input.
+
+For Android Studio, open `examples/flutter_app`, set its Flutter SDK to the
+`flutter_vr` root, and use `lib/main.dart` as the entrypoint. If Dart is not
+detected, select `<flutter_vr>/bin/cache/dart-sdk`. Choose **Chrome** in the
+toolbar device selector and leave additional run arguments empty. Opening the
+whole Flutter engine source tree is unnecessary for running the gallery and
+can trigger expensive IDE indexing.
+
+## 3. Connect a Meta Quest
+
+Install Android SDK Platform Tools and put `adb` on `PATH`. The current Android
+plugin uses SDK 36, NDK `28.2.13676358`, CMake 3.22.1 or newer, and ARM64; follow
+the companion Flutter guide for the host/toolchain setup.
+
+1. Complete Meta's developer account/device setup and enable Developer Mode
+   for the headset in the Meta Horizon app. Follow
+   [Meta's device setup instructions](https://developers.meta.com/horizon/documentation/native/android/mobile-device-setup/)
+   for the current account requirements and menus.
+2. Connect Quest with a USB **data** cable, wake/unlock it, and accept the
+   **USB debugging** authorization inside the headset. File-transfer permission
+   is not the same authorization.
+3. Check the connection:
+
+```sh
+adb devices -l
+```
+
+Your headset must be listed as `device`, not `unauthorized` or `offline`.
+For `unauthorized`, put the headset on and approve debugging. If nothing appears,
+check Developer Mode, the cable/USB port, and whether another ADB installation
+is conflicting. Select a particular headset when several are connected:
+
+```sh
+export ANDROID_SERIAL='YOUR_HEADSET_SERIAL'
+adb -s "$ANDROID_SERIAL" shell getprop ro.product.model
+```
+
+USB is the simplest first-run connection. For wireless development, connect and
+authorize over USB first, put the headset and computer on the same trusted
+network, then enable **ADB over Wi-Fi** in Meta Quest Developer Hub's Device
+Manager. Use the `IP:port` entry from `adb devices -l` as `ANDROID_SERIAL`, since
+the helper's automatic discovery looks for USB devices. Reconnect USB if the
+wireless session disappears after a restart. See
+[Meta's ADB guide](https://developers.meta.com/horizon/documentation/unity/ts-adb/)
+and [MQDH device management](https://developers.meta.com/horizon/documentation/unity/ts-mqdh-basic-usage/).
+
+## 4. Build, install, and enter native VR
+
+First finish **both** engine builds in the Flutter fork guide. The native host
+is `examples/openxr_quest`; it reuses the main gallery's registry and examples.
+Its Android project is already checked in, so do not run `flutter create` there.
+
+From this repository root:
+
+```sh
+cd "$HOME/Projects/flutter_scene_vr"
+export QUEST_FLUTTER="$FLUTTER_VR_ROOT/bin/flutter"
+export QUEST_LOCAL_ENGINE_SRC_PATH="$FLUTTER_VR_ROOT/engine/src"
+export QUEST_LOCAL_ENGINE=android_profile_arm64
+export QUEST_LOCAL_ENGINE_HOST=host_profile_arm64
+export QUEST_BUILD_MODE=profile
+
+./examples/openxr_quest/tool/quest-build-and-deploy-local-forks.sh
+```
+
+Set these paths explicitly: the helper's fallback paths refer to the maintainer's
+machine. It checks the engine artifacts, resolves dependencies, builds the ARM64
+profile APK, stops the previous demo, installs the new APK, and launches the
+immersive OpenXR activity. It does **not** compile Flutter's engine for you.
+Keep the headset awake and its controllers available while starting.
+
+The APK is written to
+`examples/openxr_quest/build/app/outputs/flutter-apk/app-profile.apk`.
+It is a development demo, not a store-ready distribution. Use the
+**local-forks** helper; the other deployment helper is for an environment where
+the required engine APIs are already integrated.
+
+The same Android app also has a flat gallery and an Enter VR action. Switching
+between **Flat mode** and VR retains the selected example, but restarts its
+authored settings: tuned slider state does not transfer between the separate
+Android processes.
+
+### Inside the headset
+
+| Control | What it does |
+| --- | --- |
+| **Examples** | Select a scene without leaving the immersive session. Choose **VR** for the original demonstration. |
+| **Controls** | Show that example's Flutter controls; **VR → Controls → Enable shadows** toggles shadows live. |
+| **Settings** | Open shared graphics and resolution controls. |
+| Aim + trigger | Click panel buttons, checkboxes, and other controls. |
+| Aim at a panel + that hand's stick | Scroll the panel. Point away from panels to navigate the scene. |
+| Left stick / right stick | Orbit the scene target / move the camera rig and target. Physical head tracking remains independent. |
+| Aim + hold grip | Move a floating panel; use the same hand's stick to push it away or pull it closer, then release to leave it there. |
+| **Recenter** / panel-reset icon | Reset the camera / restore the floating-panel layout. |
+| Small native **FPS / UI ON** button | Hide/suspend Flutter widget panels; trigger again to restore them. Scene rendering and statistics continue. |
+
+Not every gallery example or interaction has a native VR mapping. The current
+registry keeps Multiplayer, DICOM Volume, External Texture, and Split Screen
+flat-only; other examples can have interaction or device-service limitations.
+The [gallery report](https://github.com/adrian-moisa/flutter_scene_vr/blob/HEAD/examples/openxr_quest/GALLERY_VR_REPORT.md)
+separates adapted examples from physically verified ones.
+
+## 5. Show the demo on a laptop
+
+Use **Meta Quest Developer Hub (MQDH)** to connect the headset and cast/record
+the running VR experience on your computer. Its Device Manager provides
+casting, screenshots, and video capture; see
+[Meta's MQDH debugging tools](https://developers.meta.com/horizon/documentation/spatial-sdk/ts-mqdh-media/).
+If MQDH and the terminal disagree about connected devices, configure MQDH to
+use the same Android SDK `adb` executable.
+
+Casting is a view of the application running on Quest; this workflow does not
+require Quest Link or PC VR streaming. Operate VR with the headset controllers.
+For a laptop-only interactive presentation, run the Chrome gallery and select
+the same example. The browser and headset are separate app sessions, not
+automatically synchronized controls. A cast is useful for explaining the demo,
+but headset comfort, stereo depth, sharpness, and tracking must be judged while
+wearing the headset. Keep the headset's safety boundary enabled when using VR.
+
+## Settings and performance
+
+This is a working rendering demo, **not yet a highly optimized VR engine**.
+Some demanding gallery scenes remain slow. In the maintainer's original VR
+demo, enabling shadows reduced the observed frame rate from roughly **70 FPS
+to 40 FPS**. This is a scene/device/settings-specific observation, not a
+controlled benchmark or a promise for other machines and examples.
+
+Start with **VR**, compare shadows off/on, then explore heavier examples.
+Shadows currently start enabled. To build with the original VR entry's shadows
+initially disabled (other entries retain their authored defaults):
+
+```sh
+QUEST_SHADOWS=0 ./examples/openxr_quest/tool/quest-build-and-deploy-local-forks.sh
+```
+
+You can also use its live checkbox without rebuilding. **Settings** exposes
+50%, 67%, 75%, and 100% resolution, plus **Low / Medium / High / Ultra / Custom**
+graphics presets. On Quest those percentages scale the runtime-recommended eye
+dimensions; on web they scale the current physical viewport render size. They
+do not resize Flutter's UI to the same percentage. Half the width and height
+means about one quarter of the scene pixels.
+
+Presets change resolution and effects together. For an isolated comparison,
+hold resolution and all other settings fixed while changing one effect.
+Manual changes select **Custom**, saved per example for the current app session;
+restarts and flat/VR process transitions do not preserve it. Ultra is a quality
+comparison, not a recommended Quest performance baseline. See the
+[Quest gallery guide](https://github.com/adrian-moisa/flutter_scene_vr/blob/HEAD/examples/openxr_quest/README.md)
+for the current preset values.
+
+The performance panel reports frame rates, timing, and actual render/atlas
+sizes. The web **FPS** button is beside Settings. Distinguish scene submissions,
+completed stereo frames, Flutter widget frames, runtime refresh rate, and GPU
+time: a 72 Hz OpenXR loop alone does not prove 72 fresh displayed scene frames.
+Runtime-recommended eye dimensions are not the headset's physical panel size.
+Compare the same scene, viewpoint, resolution, effects, build mode, and warmed-up
+headset conditions; exclude scene-switch and resolution-transition samples.
+
+The native **FPS / UI** button helps isolate widget/panel cost by suspending
+framework frame callbacks and panel texture work. It keeps the Flutter engine,
+Dart isolate, Flutter GPU scene rendering, simulation, and stats alive. It does
+not measure a renderer with Flutter removed. Widget-texture examples retain
+their last captured widget image while UI is suspended.
+
+Work already present in this fork includes:
+
+- Direct eye output, removing the old full-size stereo Flutter surface and
+  native eye-copy stage while keeping widget surfaces separate.
+- One scene update for both eye views, bounded diagnostic history, and the
+  ability to suspend UI work for comparisons.
+- Conditional sharing of compatible shadow work between eyes, static shadow
+  caster hints, and a bounded shadow setup for the original VR scene.
+- Reduced intermediate work through single-channel depth passes, retained
+  per-eye scene-color history, and shader/material changes that avoid some
+  redundant texture sampling and depth-of-field calculations.
+
+These are implemented changes, not a claimed measured speedup for every scene.
+Sharing shadows has already been attempted and exists for compatible views,
+but it does not remove shadow receiver sampling, filtering, or all update costs.
+Shadows remain a major area for investigation. Next steps include profiling
+individual GPU passes, improving shadow reuse/filtering, reducing intermediate
+buffer bandwidth, tuning expensive effects for mobile GPUs, and investigating
+multiview/foveation and less blocking synchronization. Those are ongoing or
+future directions, not completed performance guarantees.
+
+## Troubleshooting and keeping the forks current
+
+| Symptom | Check first |
+| --- | --- |
+| Missing `Surface`, `SurfaceFrame`, or `openExternalSurface` | The local `flutter_gpu` override, selected Flutter SDK, and compatible fork revisions; then rerun `flutter pub get`. |
+| Helper reports missing engine artifacts | Build both full engine targets; confirm source path, output names, and profile/debug/release agreement. |
+| Shader compiler or asset build fails | Read the first hook error. Keep the matching host `impellerc` and `shader_lib` together; let the existing package hooks own generated assets. |
+| No authorized Quest | Developer Mode, the in-headset debugging prompt, USB data cable, `adb devices -l`, and `ANDROID_SERIAL`. |
+| App opens only as a flat Android window | Enter VR or use the local-forks helper's immersive launch. A normal Android launch alone is not an OpenXR session. |
+| Poor FPS | Begin with the VR entry at lower resolution/effects, compare shadows and UI independently, and inspect timing rather than refresh rate alone. |
+
+The intent is to contribute both forks upstream and periodically rebase them
+while that work proceeds. The Flutter engine API requires broader design,
+lifecycle, backend, and test review; the Scene changes are more contained but
+depend on that engine work. Neither upstream acceptance nor timing is promised.
+Performance and interaction validation remain part of the demo's development.
+
+For a reproducible showcase, record both fork commit IDs. Preserve local work
+before updating, follow compatible fork revisions, and rebuild both engine
+outputs after engine/dependency changes. Refresh Scene dependencies and rebuild
+the app so its hooks regenerate the appropriate assets. Do not publish local
+SDK paths or assume an arbitrary upstream rebase remains compatible.
+
+For implementation details, see the
+[direct-rendering design/history](https://github.com/adrian-moisa/flutter_scene_vr/blob/HEAD/examples/openxr_quest/DIRECT_SWAPCHAIN_RENDERING.md).
+Its dated measurements and earlier defaults are historical; use this addendum,
+the current gallery guide, and the current helper for setup and launch.
+
+## Original Flutter Scene README
+
+The material below is preserved from upstream. Its published-package setup
+describes ordinary Flutter Scene use; use the fork instructions above for this
+VR demo.
+
+---
+
 <p align="center">
   <a href="https://fscene.dev">
     <img alt="Flutter Scene" width="220px" src="https://raw.githubusercontent.com/bdero/flutter_scene_media/main/DashColorTransparent.svg">

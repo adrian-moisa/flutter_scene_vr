@@ -33,12 +33,14 @@ class ResolvePass extends RenderGraphPass {
     required double agxWhite,
     required double agxContrast,
     required PostProcessSettings postProcess,
+    FinalCommandBufferCallback? beforeSubmit,
   }) : _outputColor = outputColor,
        _exposure = exposure,
        _toneMappingMode = toneMappingMode,
        _agxWhite = agxWhite,
        _agxContrast = agxContrast,
-       _postProcess = postProcess;
+       _postProcess = postProcess,
+       _beforeSubmit = beforeSubmit;
 
   final gpu.Texture _outputColor;
   final double _exposure;
@@ -46,6 +48,7 @@ class ResolvePass extends RenderGraphPass {
   final double _agxWhite;
   final double _agxContrast;
   final PostProcessSettings _postProcess;
+  final FinalCommandBufferCallback? _beforeSubmit;
 
   static final gpu.Shader _vertexShader =
       baseShaderLibrary['FullscreenVertex']!;
@@ -159,6 +162,7 @@ class ResolvePass extends RenderGraphPass {
       ),
     );
     drawCompat(renderPass, 6);
+    _beforeSubmit?.call(commandBuffer);
     rendererSubmissions.submit(commandBuffer);
 
     context.blackboard.set(kDisplayColorBlackboardKey, _outputColor);

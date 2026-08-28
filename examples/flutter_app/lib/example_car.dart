@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -63,7 +64,7 @@ class ExampleCarState extends State<ExampleCar> {
   void initState() {
     super.initState();
     _skySource.blurriness = 0.60;
-    _load();
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {
@@ -164,7 +165,7 @@ class ExampleCarState extends State<ExampleCar> {
               );
             },
             onTick: (elapsed, deltaSeconds) {
-              _updateWheels();
+              _updateWheels(deltaSeconds);
               exampleSettings.applyTo(scene);
             },
           ),
@@ -225,10 +226,11 @@ class ExampleCarState extends State<ExampleCar> {
     ),
   );
 
-  // Advances the wheel spin/steer each frame from the slider-driven amounts.
-  void _updateWheels() {
+  // Preserve the old 60 Hz wheel speed when the headset uses a different cadence.
+  // A per-frame increment would make this animation depend on rendering cost.
+  void _updateWheels(double deltaSeconds) {
     final wheelSpeed = nodes['WheelBack.L']!.amount;
-    wheelRotation += wheelSpeed / 10;
+    wheelRotation += wheelSpeed * 6 * deltaSeconds;
 
     for (final wheelName in ['WheelBack.L', 'WheelBack.R']) {
       final wheel = nodes[wheelName]!;

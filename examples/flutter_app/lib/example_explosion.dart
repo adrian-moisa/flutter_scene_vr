@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide Material;
@@ -137,7 +138,7 @@ class ExampleExplosionState extends State<ExampleExplosion> {
   @override
   void initState() {
     super.initState();
-    _load();
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {
@@ -160,12 +161,15 @@ class ExampleExplosionState extends State<ExampleExplosion> {
     final fireballAtlas = GpuTextureSource(
       await gpuTextureFromImage(await bakeFireballAtlas()),
     );
+    if (!mounted) return;
     final smokeAtlas = GpuTextureSource(
       await gpuTextureFromImage(await bakeSmokeAtlas()),
     );
+    if (!mounted) return;
     final dot = GpuTextureSource(
       await gpuTextureFromImage(await bakeSoftDot()),
     );
+    if (!mounted) return;
 
     _buildSet();
 

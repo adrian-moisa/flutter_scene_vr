@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -38,7 +39,7 @@ class _ExampleFsceneState extends State<ExampleFscene> {
   @override
   void initState() {
     super.initState();
-    _load();
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {
@@ -78,16 +79,23 @@ class _ExampleFsceneState extends State<ExampleFscene> {
 
     final roundTripped = serializeScene(realized);
     if (!mounted) return;
-    scene.add(await loadFscenebBytesAsync(writeFsceneb(roundTripped)));
+    final reloaded = await loadFscenebBytesAsync(writeFsceneb(roundTripped));
+    if (!mounted) return;
+    scene.add(reloaded);
 
     // Stage round trip: apply the authored stage (a gradient skybox that
     // also drives the lighting), read it back from the live scene, and apply
     // the read-back copy. What renders is the round-tripped stage.
     await realizeStage(document, scene);
+    if (!mounted) {
+      scene.removeAll();
+      return;
+    }
     final stageDocument = SceneDocument();
     serializeStage(scene, stageDocument);
     if (!mounted) return;
     await realizeStage(stageDocument, scene);
+    if (!mounted) scene.removeAll();
   }
 
   @override

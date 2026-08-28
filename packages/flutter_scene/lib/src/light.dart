@@ -54,6 +54,13 @@ enum DirectionalShadowFilter {
   /// per tap and interpolates depth tests continuously, giving smooth analog
   /// penumbras without noise or stepping within a 16-sample texture budget.
   bilinearPcf,
+
+  /// One comparison at the projected receiver position.
+  ///
+  /// This preserves full shadow-map resolution without paying a full-screen
+  /// filtering kernel, making it suitable for high-pixel-density stereo
+  /// rendering and scenes whose receivers cover most of the view.
+  hard,
 }
 
 /// An infinitely-distant light source (e.g. the sun) that illuminates

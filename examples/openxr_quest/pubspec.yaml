@@ -1,0 +1,33 @@
+name: openxr_quest
+description: Flutter Scene gallery and direct-eye OpenXR host for Meta Quest.
+version: 1.0.0+1
+publish_to: none
+
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  example_app:
+    path: ../flutter_app
+  flutter:
+    sdk: flutter
+  flutter_scene: ^0.23.0
+  flutter_scene_openxr: ^0.1.0
+  vector_math: ^2.1.4
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    # Generated assets come from example_app and flutter_scene, whose own
+    # hooks and pubspecs build/package them. A host-generated copy gives the
+    # same source a second owner and makes unqualified gallery lookups fail.
+    # Keep raw source aliases for the examples' existing rootBundle calls.
+    - assets/little_paris_eiffel_tower.png
+    - assets/testsrc.mp4
+    - assets/sounds/
+    - assets_src/

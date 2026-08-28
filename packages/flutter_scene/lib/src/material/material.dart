@@ -286,6 +286,10 @@ abstract class Material {
     _noShadowFragmentShaderName = null;
     _noShadowRadianceCubeFragmentShader = null;
     _noShadowRadianceCubeFragmentShaderName = null;
+    _hardShadowFragmentShader = null;
+    _hardShadowFragmentShaderName = null;
+    _hardShadowRadianceCubeFragmentShader = null;
+    _hardShadowRadianceCubeFragmentShaderName = null;
   }
 
   /// Assigns the fragment shader by [name] from [baseShaderLibrary].
@@ -302,11 +306,17 @@ abstract class Material {
   /// `FLUTTER_SCENE_SKIP_SHADOWS`, selected for a draw with no shadow atlas
   /// bound (see [fragmentShaderForLighting]). A material without them always
   /// draws with the full shaders.
+  ///
+  /// [hardShadowName] and [hardShadowCubeName] are the twins built with
+  /// `FLUTTER_SCENE_HARD_SHADOWS`, selected for a directional light using
+  /// [DirectionalShadowFilter.hard].
   void setFragmentShaderName(
     String name, {
     String? cubeName,
     String? noShadowName,
     String? noShadowCubeName,
+    String? hardShadowName,
+    String? hardShadowCubeName,
   }) {
     _fragmentShaderName = name;
     _fragmentShader = null;
@@ -316,6 +326,10 @@ abstract class Material {
     _noShadowFragmentShader = null;
     _noShadowRadianceCubeFragmentShaderName = noShadowCubeName;
     _noShadowRadianceCubeFragmentShader = null;
+    _hardShadowFragmentShaderName = hardShadowName;
+    _hardShadowFragmentShader = null;
+    _hardShadowRadianceCubeFragmentShaderName = hardShadowCubeName;
+    _hardShadowRadianceCubeFragmentShader = null;
   }
 
   gpu.Shader? _radianceCubeFragmentShader;
@@ -324,6 +338,10 @@ abstract class Material {
   String? _noShadowFragmentShaderName;
   gpu.Shader? _noShadowRadianceCubeFragmentShader;
   String? _noShadowRadianceCubeFragmentShaderName;
+  gpu.Shader? _hardShadowFragmentShader;
+  String? _hardShadowFragmentShaderName;
+  gpu.Shader? _hardShadowRadianceCubeFragmentShader;
+  String? _hardShadowRadianceCubeFragmentShaderName;
 
   /// Assigns the already-loaded variant built with
   /// `FLUTTER_SCENE_RADIANCE_CUBE`, the counterpart of [setFragmentShader]
@@ -380,6 +398,19 @@ abstract class Material {
           ? null
           : baseShaderLibrary[_noShadowRadianceCubeFragmentShaderName!];
 
+  @internal
+  gpu.Shader? get hardShadowFragmentShader =>
+      _hardShadowFragmentShader ??= _hardShadowFragmentShaderName == null
+      ? null
+      : baseShaderLibrary[_hardShadowFragmentShaderName!];
+
+  @internal
+  gpu.Shader? get hardShadowRadianceCubeFragmentShader =>
+      _hardShadowRadianceCubeFragmentShader ??=
+          _hardShadowRadianceCubeFragmentShaderName == null
+          ? null
+          : baseShaderLibrary[_hardShadowRadianceCubeFragmentShaderName!];
+
   /// Whether [fragmentShaderForLighting] picks a no-shadow twin for
   /// [lighting], which is also what decides whether the `shadow_map` sampler
   /// (which that twin does not declare) gets bound. Both decisions must come
@@ -392,6 +423,15 @@ abstract class Material {
               : noShadowFragmentShader) !=
           null;
 
+  @internal
+  bool usesHardShadowVariant(Lighting lighting) =>
+      lighting.shadowMap != null &&
+      lighting.directionalLight?.shadowFilter == DirectionalShadowFilter.hard &&
+      (usesRadianceCubeVariant(lighting)
+              ? hardShadowRadianceCubeFragmentShader
+              : hardShadowFragmentShader) !=
+          null;
+
   /// Selects this material's fragment shader for the frame lighting state.
   ///
   /// The radiance-layout variant wins over the shadow one: a shadow variant
@@ -400,12 +440,19 @@ abstract class Material {
   @internal
   gpu.Shader fragmentShaderForLighting(Lighting lighting) {
     final noShadow = usesNoShadowVariant(lighting);
+    final hardShadow = usesHardShadowVariant(lighting);
     if (usesRadianceCubeVariant(lighting)) {
       return noShadow
           ? noShadowRadianceCubeFragmentShader!
+          : hardShadow
+          ? hardShadowRadianceCubeFragmentShader!
           : radianceCubeFragmentShader!;
     }
-    return noShadow ? noShadowFragmentShader! : fragmentShader;
+    return noShadow
+        ? noShadowFragmentShader!
+        : hardShadow
+        ? hardShadowFragmentShader!
+        : fragmentShader;
   }
 
   /// The vertex shader this material supplies for a geometry's [variant]

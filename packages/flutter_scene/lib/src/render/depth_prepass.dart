@@ -104,14 +104,16 @@ class DepthPrepass extends RenderGraphPass {
     // fp32 (not fp16): the occlusion pass reconstructs view-space positions
     // and normals from this depth, and fp16's ~11-bit mantissa quantizes it
     // into visibly banded steps (the same reason the shadow map is fp32).
-    // Only the red channel is used.
-    // TODO(flutter_scene): use a single-channel r32Float once Flutter GPU
-    // exposes it, to drop the three unused channels' bandwidth.
+    // Depth-only consumers read red; its implicit (0, 0, 1) GBA values also
+    // match the depth shader and background clear. Allocate the other channels
+    // only when a consumer requested normals and roughness alongside depth.
     final linearDepth = context.texturePool.acquire(
       TransientTextureDescriptor.color(
         width: width,
         height: height,
-        format: gpu.PixelFormat.r32g32b32a32Float,
+        format: _writeNormals
+            ? gpu.PixelFormat.r32g32b32a32Float
+            : gpu.PixelFormat.r32Float,
         debugName: 'linear_depth',
       ),
     );
@@ -311,16 +313,17 @@ class _DepthPrepassEncoder {
     bool translucentPatch = false,
   }) : _writeNormals = writeNormals,
        _translucentPatch = translucentPatch {
+    _cameraWindingFlipped = _cameraTransform.determinant() < 0;
     frustum = Frustum.matrix(_cameraTransform);
     _renderPass.setDepthWriteEnable(true);
     _renderPass.setColorBlendEnable(false);
     _renderPass.setDepthCompareOperation(gpu.CompareFunction.lessEqual);
     // Winding and culling are matched to each material per draw in [submit]
-    // (winding follows the node/instance parity, culling follows the material's
-    // own mode), so the same faces the color pass draws contribute depth.
-    _renderPass.setWindingOrder(gpu.WindingOrder.clockwise);
+    // (winding combines camera and node/instance parity, culling follows the
+    // material's own mode), so the color and depth passes draw the same faces.
+    _setWindingOrder(gpu.WindingOrder.clockwise);
     // The camera axes are constant across the pass. Pack them once and
-    // rebind per draw (clearBindings drops the binding between draws). The
+    // rebind after pipeline changes (clearBindings drops the binding). The
     // normal-writing path also needs the right/up axes to rotate the world
     // normal into view space; the depth-only path uses just forward.
     if (writeNormals) {
@@ -345,6 +348,7 @@ class _DepthPrepassEncoder {
   final gpu.RenderPass _renderPass;
   final TransientWriter _transientsBuffer;
   final Matrix4 _cameraTransform;
+  late final bool _cameraWindingFlipped;
   final Vector3 _cameraPosition;
   final int _layerMask;
   final List<Plane> _cullingPlanes;
@@ -354,6 +358,19 @@ class _DepthPrepassEncoder {
   // depth-carrying set drawn by [TranslucentDepthPatchPass].
   final bool _translucentPatch;
   late final Float32List _depthInfo;
+  gpu.BufferView? _constantDepthInfoView;
+
+  /// Applies the same reflected-camera correction as the color encoder,
+  /// including the packed-instance and translucent-depth paths.
+  void _setWindingOrder(gpu.WindingOrder windingOrder) {
+    _renderPass.setWindingOrder(
+      _cameraWindingFlipped
+          ? (windingOrder == gpu.WindingOrder.clockwise
+                ? gpu.WindingOrder.counterClockwise
+                : gpu.WindingOrder.clockwise)
+          : windingOrder,
+    );
+  }
 
   static final gpu.Shader _depthShader =
       baseShaderLibrary['LinearDepthFragment']!;
@@ -484,7 +501,8 @@ class _DepthPrepassEncoder {
           depthVertex?.layout ??
           geometry.instancedVertexLayoutFor(instanceSchema),
     );
-    if (!identical(_boundPipeline, pipeline)) {
+    final pipelineChanged = !identical(_boundPipeline, pipeline);
+    if (pipelineChanged) {
       _renderPass.clearBindings();
       _renderPass.bindPipeline(pipeline);
       _boundPipeline = pipeline;
@@ -516,10 +534,21 @@ class _DepthPrepassEncoder {
             _roughnessSampler,
       );
     }
-    _renderPass.bindUniform(
-      fragmentShader.getUniformSlot(_infoBlockName),
-      _transientsBuffer.emplace(ByteData.sublistView(_depthInfo)),
-    );
+    // Depth-only draws share the same camera-forward block throughout this
+    // pass, including masked draws. Upload it once and retain the binding until
+    // a pipeline switch clears it. Normal-writing draws still upload per item
+    // because their block also carries the material's roughness controls.
+    if (_writeNormals || pipelineChanged) {
+      final depthInfoView = _writeNormals
+          ? _transientsBuffer.emplace(ByteData.sublistView(_depthInfo))
+          : (_constantDepthInfoView ??= _transientsBuffer.emplace(
+              ByteData.sublistView(_depthInfo),
+            ));
+      _renderPass.bindUniform(
+        fragmentShader.getUniformSlot(_infoBlockName),
+        depthInfoView,
+      );
+    }
     if (masked) {
       item.material.bindDepthAlphaMask(
         _renderPass,
@@ -600,7 +629,7 @@ class _DepthPrepassEncoder {
           bindDraw(item.worldTransform * instanceTransform);
           final flip =
               item.windingFlipped != (instanceTransform.determinant() < 0);
-          _renderPass.setWindingOrder(
+          _setWindingOrder(
             flip
                 ? gpu.WindingOrder.counterClockwise
                 : gpu.WindingOrder.clockwise,
@@ -678,7 +707,7 @@ class _DepthPrepassEncoder {
         );
       }
     }
-    _renderPass.setWindingOrder(
+    _setWindingOrder(
       item.windingFlipped
           ? gpu.WindingOrder.counterClockwise
           : gpu.WindingOrder.clockwise,
@@ -700,7 +729,7 @@ class _DepthPrepassEncoder {
       } else {
         bindInstanceTransforms(_renderPass, packed.ccw, slot: instanceSlot);
       }
-      _renderPass.setWindingOrder(gpu.WindingOrder.clockwise);
+      _setWindingOrder(gpu.WindingOrder.clockwise);
       geometry.draw(_renderPass, instanceCount: packed.ccwCount);
     }
     if (packed.cwCount > 0) {
@@ -709,7 +738,7 @@ class _DepthPrepassEncoder {
       } else {
         bindInstanceTransforms(_renderPass, packed.cw, slot: instanceSlot);
       }
-      _renderPass.setWindingOrder(gpu.WindingOrder.counterClockwise);
+      _setWindingOrder(gpu.WindingOrder.counterClockwise);
       geometry.draw(_renderPass, instanceCount: packed.cwCount);
     }
   }

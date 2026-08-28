@@ -105,17 +105,19 @@ class _ObjectMaskEncoder {
     this._filter,
     this._colorOf,
   ) {
+    _cameraWindingFlipped = _cameraTransform.determinant() < 0;
     frustum = Frustum.matrix(_cameraTransform);
     _renderPass.setDepthWriteEnable(true);
     _renderPass.setColorBlendEnable(false);
     _renderPass.setDepthCompareOperation(gpu.CompareFunction.lessEqual);
     _renderPass.setCullMode(gpu.CullMode.backFace);
-    _renderPass.setWindingOrder(gpu.WindingOrder.clockwise);
+    _setWindingOrder(gpu.WindingOrder.clockwise);
   }
 
   final gpu.RenderPass _renderPass;
   final TransientWriter _transientsBuffer;
   final Matrix4 _cameraTransform;
+  late final bool _cameraWindingFlipped;
   final Vector3 _cameraPosition;
   final int _layerMask;
   final NodeFilter _filter;
@@ -125,6 +127,18 @@ class _ObjectMaskEncoder {
 
   late final Frustum frustum;
   gpu.RenderPipeline? _boundPipeline;
+
+  /// Selection/custom masks must keep the same visible faces as the color
+  /// pass, without changing the model parity used to pack instances.
+  void _setWindingOrder(gpu.WindingOrder windingOrder) {
+    _renderPass.setWindingOrder(
+      _cameraWindingFlipped
+          ? (windingOrder == gpu.WindingOrder.clockwise
+                ? gpu.WindingOrder.counterClockwise
+                : gpu.WindingOrder.clockwise)
+          : windingOrder,
+    );
+  }
 
   void submit(RenderItem item) {
     if (!item.visible) return;
@@ -212,7 +226,7 @@ class _ObjectMaskEncoder {
           bindDraw(item.worldTransform * instanceTransform);
           final flip =
               item.windingFlipped != (instanceTransform.determinant() < 0);
-          _renderPass.setWindingOrder(
+          _setWindingOrder(
             flip
                 ? gpu.WindingOrder.counterClockwise
                 : gpu.WindingOrder.clockwise,
@@ -230,12 +244,12 @@ class _ObjectMaskEncoder {
       );
       if (packed.ccwCount > 0) {
         bindInstanceTransforms(_renderPass, packed.ccw);
-        _renderPass.setWindingOrder(gpu.WindingOrder.clockwise);
+        _setWindingOrder(gpu.WindingOrder.clockwise);
         geometry.draw(_renderPass, instanceCount: packed.ccwCount);
       }
       if (packed.cwCount > 0) {
         bindInstanceTransforms(_renderPass, packed.cw);
-        _renderPass.setWindingOrder(gpu.WindingOrder.counterClockwise);
+        _setWindingOrder(gpu.WindingOrder.counterClockwise);
         geometry.draw(_renderPass, instanceCount: packed.cwCount);
       }
       return;
@@ -251,7 +265,7 @@ class _ObjectMaskEncoder {
         geometry.bindsModelTransformInstance) {
       bindSingleInstanceTransform(_renderPass, item.worldTransform);
     }
-    _renderPass.setWindingOrder(
+    _setWindingOrder(
       item.windingFlipped
           ? gpu.WindingOrder.counterClockwise
           : gpu.WindingOrder.clockwise,

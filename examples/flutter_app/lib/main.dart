@@ -1,4 +1,3 @@
-import 'package:example_app/example_car.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_scene/scene.dart'
     show
@@ -12,207 +11,22 @@ import 'package:flutter_scene/scene.dart'
         SsrDebugView,
         ToneMappingMode,
         Scene,
+        SceneViewPresentation,
         PostInsertion,
         ShadowCasterFaces,
         SpecularAmbientOcclusionMode;
-import 'package:flutter_scene_rapier/flutter_scene_rapier.dart'
-    show RapierWorld;
 import 'package:vector_math/vector_math.dart' show Vector3;
-import 'package:flutter_scene_box3d/flutter_scene_box3d.dart'
-    show Box3dPhysicsWorld;
-import 'package:example_app/example_animation.dart';
-import 'example_area_lights.dart';
-import 'example_reflection_probes.dart';
-
-import 'example_accessibility.dart';
-import 'example_audio.dart';
-import 'example_auto_exposure.dart';
-import 'example_cloth.dart';
-import 'example_configurator.dart';
-import 'example_dicom.dart';
-import 'example_kit.dart';
-import 'example_lights.dart';
-import 'example_spot_shadow.dart';
-import 'example_fscene.dart';
-import 'example_fscene_animated.dart';
-import 'example_fscene_import.dart';
-import 'example_fscene_prefab.dart';
-import 'example_fscene_stream.dart';
-import 'example_lod.dart';
-import 'example_logo.dart';
-import 'example_materialize.dart';
-import 'example_multiplayer.dart';
-import 'example_nav_route.dart';
-import 'example_physics.dart';
-import 'example_physics_box3d.dart';
-import 'example_physics_car.dart';
-import 'example_render_target.dart';
-import 'example_luts.dart';
 import 'example_settings.dart';
+import 'example_luts.dart';
 import 'example_chrome.dart';
-import 'example_shapes.dart';
-import 'example_explosion.dart';
-import 'example_external_texture.dart';
-import 'example_particles.dart';
-import 'example_planar_mirror.dart';
-import 'example_splats.dart';
-import 'example_skybox.dart';
-import 'example_ssr.dart';
-import 'example_widget_inset.dart';
-import 'example_widget_texture.dart';
-import 'example_split_screen.dart';
-import 'example_stress_tests.dart';
-import 'example_raw_shader.dart';
-import 'example_toon.dart';
-import 'example_toon_fmat.dart';
-import 'example_vertex_curve.dart';
+import 'example_registry.dart';
+import 'gallery_resolution.dart';
+import 'gallery_viewport.dart';
+import 'gallery_performance_panel.dart';
 
 void main() {
   runApp(const MyApp());
 }
-
-/// Per-example overrides of the stock [ExampleSettings] defaults, keyed by
-/// the example's name in the picker. Examples not listed start from the
-/// stock defaults. Every example gets its own fresh instance either way
-/// (see [resetExampleSettings]), so tuning one scene never leaks into
-/// another.
-final Map<String, ExampleSettings Function()> settingsDefaults = {
-  // The campfire's night look: a soft blue moonlight key from the south,
-  // ambient occlusion grounding the logs, rocks, and grass, and a warm
-  // saturated grade that leans into the firelight.
-  'Particles': () => ExampleSettings()
-    ..lightAzimuthDegrees = 190.70
-    ..lightElevationDegrees = 16.79
-    ..lightIntensity = 0.97
-    ..lightColor.setValues(1.0, 0.80, 1.0)
-    ..ambientOcclusion.enabled = true
-    ..ambientOcclusion.halfResolution = true
-    ..ambientOcclusion.radius = 0.66
-    ..ambientOcclusion.intensity = 1.01
-    ..ambientOcclusion.bias = 0.053
-    ..ambientOcclusion.sampleCount = 17
-    ..colorGrading.enabled = true
-    ..colorGrading.brightness = 1.39
-    ..colorGrading.contrast = 0.93
-    ..colorGrading.saturation = 1.36
-    ..colorGrading.temperature = 0.35
-    ..colorGrading.tint = -0.31
-    ..bloom.enabled = true
-    ..bloom.threshold = 3.63
-    ..bloom.intensity = 0.089
-    ..bloom.scatter = 1.0
-    ..godRays.enabled = true
-    ..godRays.intensity = 1.24
-    ..godRays.density = 0.63
-    ..godRays.anisotropy = 0.40
-    ..godRays.stepCount = 5
-    ..godRays.maxDistance = 141.70
-    ..godRays.jitter = 1.0
-    ..godRays.color.setValues(0.77, 0.90, 1.0)
-    ..depthOfField.enabled = true
-    ..depthOfField.focusDistance = 7.07
-    ..depthOfField.fStop = 8.98
-    ..depthOfField.focalLength = 0.178
-    ..depthOfField.blurScale = 1.0
-    ..depthOfField.quality = DepthOfFieldQuality.medium
-    ..chromaticAberration.enabled = true
-    ..chromaticAberration.intensity = 0.151
-    ..vignette.enabled = true
-    ..vignette.intensity = 0.71
-    ..vignette.radius = 0.71
-    ..vignette.smoothness = 0.5,
-  // The car's showroom look, a softened key with contact shadows, ground-truth
-  // occlusion carrying bounce light into the arches, a cool contrasty grade,
-  // and a wide-open lens flaring off the bodywork highlights. Chromatic
-  // aberration and god rays are tuned but left switched off, so turning either
-  // back on picks up where it was rather than at the stock value.
-  'Car': () => ExampleSettings()
-    ..lightIntensity = 2.043
-    ..shadowSoftness = 0.053
-    ..contactShadows = true
-    ..exposure = 1.954
-    ..environmentIntensity = 1.022
-    ..ambientOcclusion.enabled = true
-    ..ambientOcclusion.method = AmbientOcclusionMethod.groundTruth
-    ..ambientOcclusion.visibilityBitmask = true
-    ..ambientOcclusion.thickness = 0.338
-    ..ambientOcclusion.multiBounce = 0.611
-    ..ambientOcclusion.indirectLight = 7.148
-    ..ambientOcclusion.specularMode = SpecularAmbientOcclusionMode.simple
-    ..colorGrading.enabled = true
-    ..colorGrading.brightness = 1.007
-    ..colorGrading.contrast = 1.203
-    ..colorGrading.saturation = 1.110
-    ..colorGrading.temperature = -0.118
-    ..colorGrading.tint = -0.161
-    ..bloom.enabled = true
-    ..bloom.threshold = 0.876
-    ..bloom.intensity = 0.191
-    ..bloom.lensFlare.enabled = true
-    ..bloom.lensFlare.intensity = 0.300
-    ..bloom.lensFlare.ghostCount = 5
-    ..depthOfField.enabled = true
-    ..depthOfField.focusDistance = 7.94
-    ..depthOfField.fStop = 0.7
-    ..depthOfField.focalLength = 0.077
-    ..depthOfField.quality = DepthOfFieldQuality.high
-    ..vignette.enabled = true
-    ..chromaticAberration.intensity = 0.132
-    ..godRays.density = 1.764
-    ..godRays.anisotropy = 0.506
-    ..autoExposure.strength = 0.663
-    ..autoExposure.compensation = 1.265
-    ..autoExposure.minEv = -4.455
-    ..autoExposure.maxEv = 2.499
-    ..autoExposure.speedDown = 0.1,
-  // The cloth corridor is one-sided open sheets, which only cast a shadow when
-  // the shadow pass keeps both faces.
-  'Physics': () =>
-      ExampleSettings()..shadowCasterFaces = ShadowCasterFaces.both,
-  // Same for the cloth example, plus occlusion to ground the folds where they
-  // stack.
-  'Cloth': () => ExampleSettings()
-    ..shadowCasterFaces = ShadowCasterFaces.both
-    ..ambientOcclusion.enabled = true
-    ..ambientOcclusion.radius = 0.35
-    ..ambientOcclusion.intensity = 1.4,
-  // A strong sun for the adaptation walk: the outdoor half of the path
-  // should overexpose while the meter is adapted to the room.
-  'Auto Exposure': () => ExampleSettings()..lightIntensity = 7.0,
-  'Stress Tests': () => ExampleSettings()..directionalLightEnabled = false,
-  // A cinematic grade for the dark materialize stage: no key light (the
-  // effect's own emissives and the environment carry it), bloom for the hot
-  // seam and shard glows, and a subtle lens treatment.
-  'Materialize (.fmat)': () => ExampleSettings()
-    ..directionalLightEnabled = false
-    ..colorGrading.enabled = true
-    ..colorGrading.brightness = 1.05
-    ..colorGrading.contrast = 1.19
-    ..colorGrading.saturation = 1.16
-    ..colorGrading.temperature = -0.20
-    ..colorGrading.tint = 0.01
-    ..bloom.enabled = true
-    ..bloom.intensity = 0.06
-    ..chromaticAberration.enabled = true
-    ..chromaticAberration.intensity = 0.14
-    ..vignette.enabled = true,
-  // The Menger sky's look: no key light (the sky's emitters and the baked
-  // environment carry it), a bright cool saturated grade, bloom for the neon
-  // bracing, and a lens treatment.
-  'Custom Skybox': () => ExampleSettings()
-    ..directionalLightEnabled = false
-    ..colorGrading.enabled = true
-    ..colorGrading.brightness = 1.15
-    ..colorGrading.contrast = 1.07
-    ..colorGrading.saturation = 1.19
-    ..colorGrading.temperature = -0.37
-    ..colorGrading.tint = -0.05
-    ..bloom.enabled = true
-    ..bloom.threshold = 1.35
-    ..chromaticAberration.enabled = true
-    ..chromaticAberration.intensity = 0.32
-    ..vignette.enabled = true,
-};
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -225,105 +39,31 @@ class _MyAppState extends State<MyApp> {
   String selectedExample = '';
   Map<String, WidgetBuilder> examples = {};
   late final Future<void> _ready;
+  final _viewport = GalleryViewportController();
+  bool _fpsVisible = false;
+  int _exampleGeneration = 0;
 
-  // The Rapier wasm module (~1 MB on the web) loads in the background as
-  // soon as the app starts, but only the Physics example waits on it, so
-  // the other examples are not delayed by it. A no-op on native.
-  final Future<void> _physicsReady = RapierWorld.ensureInitialized();
-  final Future<void> _box3dReady = Box3dPhysicsWorld.ensureInitialized();
+  Future<void> _resetSettings() async {
+    setState(() {
+      resetExampleSettings(settingsDefaults[selectedExample], selectedExample);
+      _exampleGeneration++;
+      _viewport.resetMeasurements();
+    });
+  }
+
+  @override
+  void dispose() {
+    _viewport.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
     // Each example owns its own per-frame loop through SceneView, so there
     // is no app-level ticker here.
-    examples = {
-      'Car': (context) => const ExampleCar(),
-      'Animation': (context) => const ExampleAnimation(),
-      'Flutter Logo': (context) => const ExampleLogo(),
-      'Multiplayer': (context) => const ExampleMultiplayer(),
-      'Configurator': (context) => const ExampleConfigurator(),
-      'Lights': (context) => const ExampleLights(),
-      'Area Lights': (context) => const ExampleAreaLights(),
-      'Reflection Probes': (context) => const ExampleReflectionProbes(),
-      'Planar Mirror': (context) => const ExamplePlanarMirror(),
-      'Spot Shadow': (context) => const ExampleSpotShadow(),
-      'Cloth': (context) => const ExampleCloth(),
-      'Gameplay Kit': (context) => const ExampleKit(),
-      'Particles': (context) => const ExampleParticles(),
-      'Explosions': (context) => const ExampleExplosion(),
-      'Gaussian Splats': (context) => const ExampleSplats(),
-      'Geometry LOD': (context) => const ExampleLod(),
-      'Screen-space Reflections': (context) => const ExampleSsr(),
-      'Auto Exposure': (context) => const ExampleAutoExposure(),
-      'Navigation Route': (context) => const ExampleNavRoute(),
-      'Toon': (context) => const ExampleToon(),
-      'Raw shader': (context) => const ExampleRawShader(),
-      'Toon (.fmat)': (context) => const ExampleToonFmat(),
-      'Custom vertices (.fmat)': (context) => const ExampleVertexCurve(),
-      'Materialize (.fmat)': (context) => const ExampleMaterialize(),
-      'DICOM Volume': (context) => const ExampleDicom(),
-      'Custom Skybox': (context) => const ExampleSkybox(),
-      'Audio': (context) => const ExampleAudio(),
-      'Widget Texture': (context) => const ExampleWidgetTexture(),
-      'Widget Input (inset view)': (context) => const ExampleWidgetInset(),
-      'External Texture': (context) => const ExampleExternalTexture(),
-      'Accessibility': (context) => const ExampleAccessibility(),
-      'Render Targets': (context) => const ExampleRenderTarget(),
-      'Physics': (context) => FutureBuilder<void>(
-        // The Rapier backend needs its wasm module loaded before a world
-        // can be built on the web; wait on it here so only this example
-        // pays the cost.
-        future: _physicsReady,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return const ExamplePhysics();
-        },
-      ),
-      'Physics (box3d)': (context) => FutureBuilder<void>(
-        // The box3d backend readiness (a no-op on native; the wasm load on
-        // the web) before a world can be built.
-        future: _box3dReady,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return const ExamplePhysicsBox3d();
-        },
-      ),
-      'Car Physics': (context) => FutureBuilder<void>(
-        // Shares the Rapier backend with the Physics example, so it waits on
-        // the same wasm load before building its world.
-        future: _physicsReady,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return const ExamplePhysicsCar();
-        },
-      ),
-      'Shapes': (context) => FutureBuilder<void>(
-        // Shares the Rapier backend with the Physics example, so it waits on
-        // the same wasm load before building its world.
-        future: _physicsReady,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return const ExampleShapes();
-        },
-      ),
-      'fscene': (context) => const ExampleFscene(),
-      'fscene (import)': (context) => const ExampleFsceneImport(),
-      'fscene (animated)': (context) => const ExampleFsceneAnimated(),
-      'fscene (prefab)': (context) => const ExampleFscenePrefab(),
-      'fscene (stream)': (context) => const ExampleFsceneStream(),
-      'Split Screen': (context) => const ExampleSplitScreen(),
-      'Stress Tests': (context) => const ExampleStressTests(),
-    };
+    examples = galleryExamples();
     selectedExample = examples.keys.first;
-    resetExampleSettings(settingsDefaults[selectedExample]);
+    resetExampleSettings(settingsDefaults[selectedExample], selectedExample);
 
     _ready = Future.wait([
       Scene.initializeStaticResources(),
@@ -352,6 +92,7 @@ class _MyAppState extends State<MyApp> {
         ),
       ),
       home: Scaffold(
+        backgroundColor: galleryBackgroundColor,
         body: FutureBuilder<void>(
           // Gate example construction on static-resource init. Examples build
           // geometry/materials in initState, which touches the shader bundle;
@@ -364,7 +105,16 @@ class _MyAppState extends State<MyApp> {
             }
             return Stack(
               children: [
-                SizedBox.expand(child: examples[selectedExample]!(context)),
+                SizedBox.expand(
+                  child: SceneViewPresentation(
+                    key: ValueKey('$selectedExample/$_exampleGeneration'),
+                    onTick: _viewport.tick,
+                    onDetach: _viewport.detach,
+                    camera: _viewport.camera,
+                    decorateView: _viewport.decorate,
+                    child: Builder(builder: examples[selectedExample]!),
+                  ),
+                ),
                 // Example picker (top-left, overlaid on the scene).
                 ValueListenableBuilder<bool>(
                   valueListenable: exampleChromeVisible,
@@ -383,24 +133,82 @@ class _MyAppState extends State<MyApp> {
                             // Every example runs on its own settings instance;
                             // examples listed in settingsDefaults start from
                             // their own defaults instead of the stock ones.
-                            resetExampleSettings(settingsDefaults[next]);
+                            resetExampleSettings(settingsDefaults[next], next);
                           });
                         },
                       ),
                     ),
                   ),
                 ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: exampleChromeVisible,
+                  builder: (context, visible, _) => Offstage(
+                    offstage: !visible,
+                    child: SafeArea(
+                      minimum: const EdgeInsets.all(8),
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: IconButton.filledTonal(
+                          tooltip: 'FPS counter',
+                          icon: const Icon(Icons.speed),
+                          isSelected: _fpsVisible,
+                          onPressed: () =>
+                              setState(() => _fpsVisible = !_fpsVisible),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (_fpsVisible)
+                  Positioned(
+                    top: 64,
+                    right: 8,
+                    child: SizedBox(
+                      width: (MediaQuery.sizeOf(context).width - 16).clamp(
+                        0.0,
+                        380.0,
+                      ),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: (MediaQuery.sizeOf(context).height - 80)
+                              .clamp(0.0, double.infinity),
+                        ),
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: exampleChromeVisible,
+                          builder: (context, visible, child) =>
+                              Offstage(offstage: !visible, child: child),
+                          child: GalleryFpsPanel(
+                            controller: _viewport,
+                            onClose: () => setState(() => _fpsVisible = false),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 // Settings sidebar (top-right): global post-processing
                 // controls applied to whichever example is on screen.
                 ValueListenableBuilder<bool>(
                   valueListenable: exampleChromeVisible,
                   builder: (context, visible, child) =>
                       Offstage(offstage: !visible, child: child),
-                  child: const SafeArea(
-                    minimum: EdgeInsets.all(8),
+                  child: SafeArea(
+                    minimum: const EdgeInsets.all(8),
                     child: Align(
                       alignment: Alignment.topRight,
-                      child: _SettingsSidebar(),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 52),
+                        child: GallerySettingsSidebar(
+                          onResetSettings: _resetSettings,
+                          forceCollapsed: _fpsVisible,
+                          resolutionBaseProvider: () => _viewport
+                              .scene
+                              ?.screenResolutions
+                              .values
+                              .firstOrNull
+                              ?.display,
+                          onOpen: () => setState(() => _fpsVisible = false),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -467,24 +275,265 @@ class _ExamplePicker extends StatelessWidget {
 ///
 /// Effects are grouped under collapsible sections so more can be added as
 /// the post-processing suite grows.
-class _SettingsSidebar extends StatefulWidget {
-  const _SettingsSidebar();
+class GallerySettingsSidebar extends StatefulWidget {
+  const GallerySettingsSidebar({
+    required this.onResetSettings,
+    this.embedded = false,
+    this.forceCollapsed = false,
+    this.onOpen,
+    this.resolutionBase,
+    this.resolutionBaseProvider,
+    this.onRenderScale,
+    super.key,
+  });
+  final bool embedded;
+  final bool forceCollapsed;
+  final VoidCallback? onOpen;
+
+  /// Runtime-recommended eye pixels in VR; hosting Flutter view otherwise.
+  final Size? resolutionBase;
+  final Size? Function()? resolutionBaseProvider;
+  final Future<double> Function(double scale)? onRenderScale;
+  final Future<void> Function() onResetSettings;
 
   @override
-  State<_SettingsSidebar> createState() => _SettingsSidebarState();
+  State<GallerySettingsSidebar> createState() => _GallerySettingsSidebarState();
 }
 
-class _SettingsSidebarState extends State<_SettingsSidebar> {
+class _GallerySettingsSidebarState extends State<GallerySettingsSidebar> {
   bool _expanded = false;
-  double _width = 320;
+  bool _changing = false;
+  double _width = 340;
+  String? _settingsError;
+
+  @override
+  void initState() {
+    super.initState();
+    galleryGraphicsPreset.addListener(_refreshSettings);
+  }
+
+  @override
+  void dispose() {
+    galleryGraphicsPreset.removeListener(_refreshSettings);
+    super.dispose();
+  }
+
+  void _refreshSettings() {
+    if (mounted) setState(() {});
+  }
+
+  void _editSettings(VoidCallback edit) {
+    final before = exampleSettings.describe();
+    setState(edit);
+    if (before != exampleSettings.describe()) {
+      rememberCustomGraphics();
+    }
+  }
+
+  Future<void> _resetSettings() async {
+    if (_changing) return;
+    setState(() {
+      _changing = true;
+      _settingsError = null;
+    });
+    try {
+      await widget.onResetSettings();
+    } catch (error) {
+      if (mounted) _settingsError = 'Could not reset settings: $error';
+    } finally {
+      if (mounted) setState(() => _changing = false);
+    }
+  }
+
+  Future<void> _selectPreset(String name) async {
+    // When a native resize is requested, commit the preset only after it succeeds.
+    // The generation guard prevents a late resize from editing the next example.
+    final generation = gallerySettingsGeneration;
+    final candidate = settingsForGraphicsPreset(name);
+    setState(() {
+      _changing = true;
+      _settingsError = null;
+    });
+    try {
+      if (widget.onRenderScale != null) {
+        await widget.onRenderScale!(candidate.renderScale);
+      }
+      if (!mounted || generation != gallerySettingsGeneration) return;
+      applyGraphicsPreset(name, candidate);
+    } catch (error) {
+      if (mounted) _settingsError = 'Settings unchanged: $error';
+    } finally {
+      if (mounted) setState(() => _changing = false);
+    }
+  }
+
+  Future<void> _selectResolution(double scale) async {
+    final generation = gallerySettingsGeneration;
+    setState(() {
+      _changing = true;
+      _settingsError = null;
+    });
+    try {
+      final actual = await widget.onRenderScale?.call(scale) ?? scale;
+      if (!mounted || generation != gallerySettingsGeneration) return;
+      exampleSettings.renderScale = actual;
+      rememberCustomGraphics(resolutionOnly: true);
+    } catch (error) {
+      if (mounted) _settingsError = 'Resolution unchanged: $error';
+    } finally {
+      if (mounted) setState(() => _changing = false);
+    }
+  }
+
+  Widget _contents(BuildContext context) => SingleChildScrollView(
+    key: const PageStorageKey('global-render-settings'),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              GalleryResolutionControl(
+                base:
+                    widget.resolutionBase ??
+                    widget.resolutionBaseProvider?.call() ??
+                    View.of(context).physicalSize,
+                scale: exampleSettings.renderScale,
+                enabled: !_changing,
+                immersive: widget.onRenderScale != null,
+                onChanged: _selectResolution,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Graphics quality',
+                style: TextStyle(
+                  fontSize: widget.embedded ? 22 : 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 4,
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      key: const ValueKey('graphics-quality'),
+                      isExpanded: true,
+                      itemHeight: 56,
+                      iconSize: 28,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      value: galleryGraphicsPreset.value,
+                      onChanged: _changing
+                          ? null
+                          : (value) {
+                              if (value != null) _selectPreset(value);
+                            },
+                      items: [
+                        for (final name in [
+                          'Authored',
+                          'Low',
+                          'Medium',
+                          'High',
+                          'Ultra',
+                          'Custom',
+                        ])
+                          DropdownMenuItem(
+                            value: name,
+                            enabled: name != 'Custom' || hasCustomGraphics,
+                            child: Text(
+                              name == 'Authored' ? 'Example default' : name,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Edits save to Custom for this example, this session. Select Custom to restore.',
+                style: TextStyle(
+                  fontSize: widget.embedded ? 18 : 14,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const ValueKey('reset-settings'),
+                  onPressed: _changing ? null : _resetSettings,
+                  icon: const Icon(Icons.settings_backup_restore),
+                  label: const Text('Reset settings'),
+                ),
+              ),
+              Text(
+                'Restarts with original settings and resolution. Keeps saved Custom.',
+                style: TextStyle(
+                  fontSize: widget.embedded ? 18 : 14,
+                  height: 1.35,
+                ),
+              ),
+              if (_changing) const LinearProgressIndicator(),
+              if (_settingsError != null)
+                Text(
+                  _settingsError!,
+                  style: const TextStyle(color: Colors.orange),
+                ),
+            ],
+          ),
+        ),
+        if (widget.onRenderScale == null)
+          const ExpansionTile(
+            title: Text('Camera controls'),
+            children: [
+              Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(galleryCameraHelp),
+              ),
+            ],
+          ),
+        // Disable edits while an asynchronous native resize is pending.
+        IgnorePointer(
+          ignoring: _changing,
+          child: Column(
+            children: [
+              _buildRendering(),
+              _buildGlobalIllumination(),
+              _buildExposure(),
+              _buildDirectionalLight(),
+              _buildAmbientOcclusion(),
+              _buildFog(),
+              _buildReflections(),
+              _buildPostProcessing(),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
-    final surface = Theme.of(
-      context,
-    ).colorScheme.surface.withValues(alpha: 0.95);
-
-    if (!_expanded) {
+    if (widget.embedded) return _contents(context);
+    // Keep world geometry from competing with settings text and controls.
+    final surface = Theme.of(context).colorScheme.surface;
+    if (!_expanded || widget.forceCollapsed) {
       return Material(
         color: surface,
         borderRadius: BorderRadius.circular(8),
@@ -492,98 +541,78 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
         child: IconButton(
           icon: const Icon(Icons.tune),
           tooltip: 'Settings',
-          onPressed: () => setState(() => _expanded = true),
+          onPressed: () {
+            widget.onOpen?.call();
+            setState(() => _expanded = true);
+          },
         ),
       );
     }
-
-    final maxWidth = MediaQuery.of(context).size.width - 32;
-    return Material(
-      color: surface,
-      borderRadius: BorderRadius.circular(8),
-      elevation: 2,
-      child: SizedBox(
-        width: _width.clamp(280.0, maxWidth),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height - 16,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Drag the panel's left edge to resize it.
-              MouseRegion(
-                cursor: SystemMouseCursors.resizeLeftRight,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onHorizontalDragUpdate: (details) => setState(() {
-                    _width = (_width - details.delta.dx).clamp(280.0, maxWidth);
-                  }),
-                  child: const SizedBox(
-                    width: 8,
-                    child: Center(
-                      child: SizedBox(
-                        width: 2,
-                        height: 32,
-                        child: ColoredBox(color: Colors.black26),
-                      ),
-                    ),
-                  ),
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth.clamp(
+          0.0,
+          MediaQuery.sizeOf(context).width - 16,
+        );
+        final minWidth = maxWidth < 280 ? maxWidth : 280.0;
+        return Material(
+          color: surface,
+          borderRadius: BorderRadius.circular(8),
+          elevation: 2,
+          child: SizedBox(
+            width: _width.clamp(minWidth, maxWidth),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height - 16,
               ),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 4, 4, 0),
-                      child: Row(
-                        children: [
-                          Text(
-                            'Settings',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.receipt_long),
-                            tooltip: 'Print all settings to the log',
-                            onPressed: () => debugPrint(
-                              'Shared settings dump:\n'
-                              '${exampleSettings.describe()}',
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            tooltip: 'Close settings',
-                            onPressed: () => setState(() => _expanded = false),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildRendering(),
-                            _buildGlobalIllumination(),
-                            _buildExposure(),
-                            _buildDirectionalLight(),
-                            _buildAmbientOcclusion(),
-                            _buildFog(),
-                            _buildReflections(),
-                            _buildPostProcessing(),
-                          ],
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  MouseRegion(
+                    cursor: SystemMouseCursors.resizeLeftRight,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onHorizontalDragUpdate: (details) => setState(
+                        () => _width = (_width - details.delta.dx).clamp(
+                          minWidth,
+                          maxWidth,
                         ),
                       ),
+                      child: const SizedBox(width: 8),
                     ),
-                  ],
-                ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('Settings'),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.receipt_long),
+                              tooltip: 'Print all settings to the log',
+                              onPressed: () =>
+                                  debugPrint(exampleSettings.describe()),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              tooltip: 'Close settings',
+                              onPressed: () =>
+                                  setState(() => _expanded = false),
+                            ),
+                          ],
+                        ),
+                        Flexible(child: _contents(context)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -593,18 +622,22 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
     );
     return ExpansionTile(
       title: const Text('Rendering'),
-      initiallyExpanded: true,
+      initiallyExpanded: false,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text('Anti-aliasing'),
-            const Spacer(),
             DropdownButton<AntiAliasingMode>(
               value: exampleSettings.antiAliasingMode,
               onChanged: (value) {
                 if (value != null) {
-                  setState(() => exampleSettings.antiAliasingMode = value);
+                  _editSettings(() => exampleSettings.antiAliasingMode = value);
                 }
               },
               items: [
@@ -622,38 +655,18 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
               'with FXAA.',
             ),
           ),
-        Row(
-          children: [
-            Expanded(
-              child: _slider(
-                'Render scale',
-                exampleSettings.renderScale,
-                0.001,
-                2,
-                (v) {
-                  exampleSettings.renderScale = v;
-                },
-                decimals: 3,
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.restart_alt, size: 18),
-              tooltip: 'Reset render scale',
-              visualDensity: VisualDensity.compact,
-              onPressed: () =>
-                  setState(() => exampleSettings.renderScale = 1.0),
-            ),
-          ],
-        ),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text('Filter'),
-            const Spacer(),
             DropdownButton<FilterQuality>(
               value: exampleSettings.filterQuality,
               onChanged: (value) {
                 if (value != null) {
-                  setState(() => exampleSettings.filterQuality = value);
+                  _editSettings(() => exampleSettings.filterQuality = value);
                 }
               },
               items: [
@@ -708,7 +721,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Object motion vectors'),
             value: exampleSettings.temporalAntiAliasing.objectMotion,
-            onChanged: (value) => setState(
+            onChanged: (value) => _editSettings(
               () => exampleSettings.temporalAntiAliasing.objectMotion = value,
             ),
           ),
@@ -716,7 +729,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Skinned motion vectors'),
             value: exampleSettings.temporalAntiAliasing.skinnedMotion,
-            onChanged: (value) => setState(
+            onChanged: (value) => _editSettings(
               () => exampleSettings.temporalAntiAliasing.skinnedMotion = value,
             ),
           ),
@@ -730,21 +743,25 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
     final meter = settings.autoExposure;
     return ExpansionTile(
       title: const Text('Exposure and tone mapping'),
-      initiallyExpanded: true,
+      initiallyExpanded: false,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
         _slider('Exposure', settings.exposure, 0, 8, (v) {
           settings.exposure = v;
         }),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text('Tone mapping'),
-            const Spacer(),
             DropdownButton<ToneMappingMode>(
               value: settings.toneMapping,
               onChanged: (value) {
                 if (value != null) {
-                  setState(() => settings.toneMapping = value);
+                  _editSettings(() => settings.toneMapping = value);
                 }
               },
               items: [
@@ -761,7 +778,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Auto exposure'),
           value: meter.enabled,
-          onChanged: (value) => setState(() => meter.enabled = value),
+          onChanged: (value) => _editSettings(() => meter.enabled = value),
         ),
         if (meter.enabled) ...[
           _slider('Strength', meter.strength, 0, 1, (v) {
@@ -791,23 +808,27 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
     final fog = exampleSettings.fog;
     return ExpansionTile(
       title: const Text('Fog'),
-      initiallyExpanded: true,
+      initiallyExpanded: false,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: fog.enabled,
-          onChanged: (value) => setState(() => fog.enabled = value),
+          onChanged: (value) => _editSettings(() => fog.enabled = value),
         ),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text('Mode'),
-            const Spacer(),
             DropdownButton<FogMode>(
               value: fog.mode,
               onChanged: (value) {
-                if (value != null) setState(() => fog.mode = value);
+                if (value != null) _editSettings(() => fog.mode = value);
               },
               items: [
                 for (final mode in FogMode.values)
@@ -857,14 +878,15 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
     final ssr = exampleSettings.screenSpaceReflections;
     return ExpansionTile(
       title: const Text('Screen-space reflections'),
-      initiallyExpanded: true,
+      initiallyExpanded: false,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: ssr.enabled,
-          onChanged: (value) => setState(() => ssr.enabled = value),
+          onChanged: (value) => _editSettings(() => ssr.enabled = value),
         ),
         _slider('Intensity', ssr.intensity, 0, 2, (v) => ssr.intensity = v),
         _slider('Max distance', ssr.maxDistance, 1, 100, (v) {
@@ -886,14 +908,17 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
         _slider('Resolution', ssr.resolutionScale, 0.25, 1, (v) {
           ssr.resolutionScale = v;
         }),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text('Debug view'),
-            const Spacer(),
             DropdownButton<SsrDebugView>(
               value: ssr.debugView,
               onChanged: (value) {
-                if (value != null) setState(() => ssr.debugView = value);
+                if (value != null) _editSettings(() => ssr.debugView = value);
               },
               items: [
                 for (final view in SsrDebugView.values)
@@ -909,7 +934,8 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
   Widget _buildPostProcessing() {
     return ExpansionTile(
       title: const Text('Post-processing'),
-      initiallyExpanded: true,
+      initiallyExpanded: false,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
       childrenPadding: EdgeInsets.zero,
       children: [
         _buildColorGrading(),
@@ -928,7 +954,8 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
     final settings = exampleSettings;
     return ExpansionTile(
       title: const Text('Directional light'),
-      initiallyExpanded: true,
+      initiallyExpanded: false,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
         SwitchListTile(
@@ -936,13 +963,14 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           title: const Text('Enabled'),
           value: settings.directionalLightEnabled,
           onChanged: (value) =>
-              setState(() => settings.directionalLightEnabled = value),
+              _editSettings(() => settings.directionalLightEnabled = value),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Shadow only'),
           value: settings.shadowOnly,
-          onChanged: (value) => setState(() => settings.shadowOnly = value),
+          onChanged: (value) =>
+              _editSettings(() => settings.shadowOnly = value),
         ),
         _slider('Azimuth', settings.lightAzimuthDegrees, 0, 360, (v) {
           settings.lightAzimuthDegrees = v;
@@ -967,7 +995,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           title: const Text('Casts shadow'),
           value: settings.lightCastsShadow,
           onChanged: (value) =>
-              setState(() => settings.lightCastsShadow = value),
+              _editSettings(() => settings.lightCastsShadow = value),
         ),
         _slider('Softness', settings.shadowSoftness, 0, 0.3, (v) {
           settings.shadowSoftness = v;
@@ -977,7 +1005,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           title: const Text('Filter'),
           trailing: DropdownButton<DirectionalShadowFilter>(
             value: settings.shadowFilter,
-            onChanged: (filter) => setState(() {
+            onChanged: (filter) => _editSettings(() {
               settings.shadowFilter =
                   filter ?? DirectionalShadowFilter.rotatedPoisson;
             }),
@@ -1009,7 +1037,8 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Contact shadows'),
           value: settings.contactShadows,
-          onChanged: (value) => setState(() => settings.contactShadows = value),
+          onChanged: (value) =>
+              _editSettings(() => settings.contactShadows = value),
         ),
         if (settings.contactShadows)
           _slider('Contact distance', settings.contactShadowDistance, 0.05, 2, (
@@ -1032,15 +1061,18 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
         _slider('Cascade overlap', settings.cascadeOverlap, 0, 1, (v) {
           settings.cascadeOverlap = v;
         }),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text('Resolution'),
-            const Spacer(),
             DropdownButton<int>(
               value: settings.shadowMapResolution,
               onChanged: (value) {
                 if (value != null) {
-                  setState(() => settings.shadowMapResolution = value);
+                  _editSettings(() => settings.shadowMapResolution = value);
                 }
               },
               items: [
@@ -1062,15 +1094,18 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
         _slider('Ambient str.', settings.shadowAmbientStrength, 0, 1, (v) {
           settings.shadowAmbientStrength = v;
         }),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text('Caster faces'),
-            const Spacer(),
             DropdownButton<ShadowCasterFaces>(
               value: settings.shadowCasterFaces,
               onChanged: (value) {
                 if (value != null) {
-                  setState(() => settings.shadowCasterFaces = value);
+                  _editSettings(() => settings.shadowCasterFaces = value);
                 }
               },
               items: [
@@ -1088,20 +1123,21 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
     final settings = exampleSettings.ambientOcclusion;
     return ExpansionTile(
       title: const Text('Ambient occlusion'),
-      initiallyExpanded: true,
+      initiallyExpanded: false,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: settings.enabled,
-          onChanged: (value) => setState(() => settings.enabled = value),
+          onChanged: (value) => _editSettings(() => settings.enabled = value),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Ground-truth method'),
           value: settings.method == AmbientOcclusionMethod.groundTruth,
-          onChanged: (value) => setState(() {
+          onChanged: (value) => _editSettings(() {
             settings.method = value
                 ? AmbientOcclusionMethod.groundTruth
                 : AmbientOcclusionMethod.obscurance;
@@ -1129,7 +1165,8 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Depth mip chain'),
           value: settings.depthMipChain,
-          onChanged: (value) => setState(() => settings.depthMipChain = value),
+          onChanged: (value) =>
+              _editSettings(() => settings.depthMipChain = value),
         ),
         if (settings.method == AmbientOcclusionMethod.groundTruth) ...[
           _slider('Slices', settings.sliceCount.toDouble(), 1, 8, (v) {
@@ -1145,7 +1182,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
             title: const Text('Visibility bitmask'),
             value: settings.visibilityBitmask,
             onChanged: (value) =>
-                setState(() => settings.visibilityBitmask = value),
+                _editSettings(() => settings.visibilityBitmask = value),
           ),
           if (settings.visibilityBitmask) ...[
             _slider('Thickness', settings.thickness, 0.05, 2, (v) {
@@ -1165,7 +1202,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
               title: const Text('Bent normals'),
               value: settings.bentNormals,
               onChanged: (value) =>
-                  setState(() => settings.bentNormals = value),
+                  _editSettings(() => settings.bentNormals = value),
             ),
         ] else ...[
           _slider('Bias', settings.bias, 0, 0.1, (v) {
@@ -1182,14 +1219,15 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Half resolution'),
           value: settings.halfResolution,
-          onChanged: (value) => setState(() => settings.halfResolution = value),
+          onChanged: (value) =>
+              _editSettings(() => settings.halfResolution = value),
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Specular occlusion'),
           trailing: DropdownButton<SpecularAmbientOcclusionMode>(
             value: settings.specularMode,
-            onChanged: (mode) => setState(() {
+            onChanged: (mode) => _editSettings(() {
               settings.specularMode = mode ?? SpecularAmbientOcclusionMode.none;
             }),
             items: [
@@ -1206,14 +1244,15 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
     final grading = exampleSettings.colorGrading;
     return ExpansionTile(
       title: const Text('Color grading'),
-      initiallyExpanded: true,
+      initiallyExpanded: false,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: grading.enabled,
-          onChanged: (value) => setState(() => grading.enabled = value),
+          onChanged: (value) => _editSettings(() => grading.enabled = value),
         ),
         _slider('Brightness', grading.brightness, 0, 2, (v) {
           grading.brightness = v;
@@ -1257,7 +1296,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
                   orElse: () => exampleLuts.entries.first,
                 )
                 .key,
-            onChanged: (name) => setState(() {
+            onChanged: (name) => _editSettings(() {
               ensureExampleLuts();
               grading.lut = exampleLuts[name];
             }),
@@ -1286,7 +1325,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: settings.enabled,
-          onChanged: (value) => setState(() => settings.enabled = value),
+          onChanged: (value) => _editSettings(() => settings.enabled = value),
         ),
         _slider('Intensity', settings.intensity, 0, 1, (v) {
           settings.intensity = v;
@@ -1305,7 +1344,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: settings.enabled,
-          onChanged: (value) => setState(() => settings.enabled = value),
+          onChanged: (value) => _editSettings(() => settings.enabled = value),
         ),
         _slider('Intensity', settings.intensity, 0, 1, (v) {
           settings.intensity = v;
@@ -1330,7 +1369,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: settings.enabled,
-          onChanged: (value) => setState(() => settings.enabled = value),
+          onChanged: (value) => _editSettings(() => settings.enabled = value),
         ),
         _slider('Intensity', settings.intensity, 0, 1, (v) {
           settings.intensity = v;
@@ -1349,7 +1388,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: settings.enabled,
-          onChanged: (value) => setState(() => settings.enabled = value),
+          onChanged: (value) => _editSettings(() => settings.enabled = value),
         ),
         _slider('Threshold', settings.threshold, 0, 4, (v) {
           settings.threshold = v;
@@ -1365,7 +1404,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           title: const Text('Lens flare'),
           value: settings.lensFlare.enabled,
           onChanged: (value) =>
-              setState(() => settings.lensFlare.enabled = value),
+              _editSettings(() => settings.lensFlare.enabled = value),
         ),
         _slider('Flare intensity', settings.lensFlare.intensity, 0, 4, (v) {
           settings.lensFlare.intensity = v;
@@ -1401,7 +1440,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: settings.enabled,
-          onChanged: (value) => setState(() => settings.enabled = value),
+          onChanged: (value) => _editSettings(() => settings.enabled = value),
         ),
         _slider('Intensity', settings.intensity, 0, 4, (v) {
           settings.intensity = v;
@@ -1444,7 +1483,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: settings.enabled,
-          onChanged: (value) => setState(() => settings.enabled = value),
+          onChanged: (value) => _editSettings(() => settings.enabled = value),
         ),
         _slider('Focus dist.', settings.focusDistance, 0.1, 40, (v) {
           settings.focusDistance = v;
@@ -1481,7 +1520,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           title: const Text('Quality'),
           trailing: DropdownButton<DepthOfFieldQuality>(
             value: settings.quality,
-            onChanged: (value) => setState(() {
+            onChanged: (value) => _editSettings(() {
               if (value != null) settings.quality = value;
             }),
             items: [
@@ -1498,24 +1537,28 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
     final settings = exampleSettings.globalIllumination;
     return ExpansionTile(
       title: const Text('Global illumination (DDGI)'),
-      initiallyExpanded: true,
+      initiallyExpanded: false,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
           value: settings.enabled,
-          onChanged: (value) => setState(() => settings.enabled = value),
+          onChanged: (value) => _editSettings(() => settings.enabled = value),
         ),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text('Volume mode'),
-            const Spacer(),
             DropdownButton<IrradianceVolumeMode>(
               value: settings.volumeMode,
               onChanged: (value) {
                 if (value != null) {
-                  setState(() => settings.volumeMode = value);
+                  _editSettings(() => settings.volumeMode = value);
                 }
               },
               items: [
@@ -1564,15 +1607,18 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
         _slider('Extents Z', settings.extents.z, 1, 60, (v) {
           settings.extents.z = v;
         }),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
           children: [
             const Text('Injection resolution'),
-            const Spacer(),
             DropdownButton<IrradianceInjectionResolution>(
               value: settings.injectionResolution,
               onChanged: (value) {
                 if (value != null) {
-                  setState(() => settings.injectionResolution = value);
+                  _editSettings(() => settings.injectionResolution = value);
                 }
               },
               items: [
@@ -1596,13 +1642,13 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
           title: const Text('Update when idle only'),
           value: settings.updateWhenIdleOnly,
           onChanged: (value) =>
-              setState(() => settings.updateWhenIdleOnly = value),
+              _editSettings(() => settings.updateWhenIdleOnly = value),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Bake only'),
           value: settings.bakeOnly,
-          onChanged: (value) => setState(() => settings.bakeOnly = value),
+          onChanged: (value) => _editSettings(() => settings.bakeOnly = value),
         ),
       ],
     );
@@ -1620,15 +1666,16 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Enabled'),
-          value: effect.enabled,
-          onChanged: (value) => setState(() => effect.enabled = value),
+          value: exampleSettings.waveEnabled,
+          onChanged: (value) =>
+              _editSettings(() => exampleSettings.waveEnabled = value),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('After tone mapping'),
-          value: effect.insertion == PostInsertion.afterTonemap,
-          onChanged: (value) => setState(() {
-            effect.insertion = value
+          value: exampleSettings.waveInsertion == PostInsertion.afterTonemap,
+          onChanged: (value) => _editSettings(() {
+            exampleSettings.waveInsertion = value
                 ? PostInsertion.afterTonemap
                 : PostInsertion.beforeTonemap;
           }),
@@ -1649,6 +1696,28 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
     int decimals = 2,
   }) {
     final textStyle = Theme.of(context).textTheme.bodySmall;
+    if (widget.embedded) {
+      // A long label and a precise value need their own line in VR; the old
+      // 84/36-pixel cells crushed both when the panel font was enlarged.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(label, style: textStyle)),
+              const SizedBox(width: 16),
+              Text(value.toStringAsFixed(decimals), style: textStyle),
+            ],
+          ),
+          Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            onChanged: (v) => _editSettings(() => onChanged(v)),
+          ),
+        ],
+      );
+    }
     return Row(
       children: [
         SizedBox(width: 84, child: Text(label, style: textStyle)),
@@ -1657,7 +1726,7 @@ class _SettingsSidebarState extends State<_SettingsSidebar> {
             value: value.clamp(min, max),
             min: min,
             max: max,
-            onChanged: (v) => setState(() => onChanged(v)),
+            onChanged: (v) => _editSettings(() => onChanged(v)),
           ),
         ),
         SizedBox(

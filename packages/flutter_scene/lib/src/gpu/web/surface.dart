@@ -1,5 +1,36 @@
 part of '_gpu.dart';
 
+/// Presentation result placeholder for source compatibility with native
+/// Flutter GPU surface hosts.
+enum GpuPresentStatus { success, suboptimal, outOfDate }
+
+/// A platform-owned presentable frame.
+///
+/// Web Flutter Scene does not currently vend surface frames, but declaring the
+/// contract keeps direct-target application code conditionally compilable. A
+/// host implementation must consume each frame exactly once via [present] or
+/// [discard].
+abstract interface class GpuSurfaceFrame {
+  Texture get colorTexture;
+
+  GpuPresentStatus present(CommandBuffer commandBuffer);
+
+  void discard();
+}
+
+/// Native Flutter GPU image surfaces are not available on this WebGL shim.
+final class GpuImageSurface {
+  GpuImageSurface._();
+
+  GpuSurfaceFrame acquireNextFrame() => throw UnsupportedError(
+    'GpuImageSurface is not available on the Flutter Scene WebGL backend.',
+  );
+
+  ui.Image? get currentImage => throw UnsupportedError(
+    'GpuImageSurface is not available on the Flutter Scene WebGL backend.',
+  );
+}
+
 /// A WebGL2-backed offscreen render target that can be snapshotted into a
 /// `ui.Image` for display by Flutter.
 ///

@@ -159,6 +159,7 @@ class VelocityPass extends RenderGraphPass {
     final unskinnedModelInfo = Float32List(32);
 
     final frustum = Frustum.matrix(_currentViewProjection);
+    final cameraWindingFlipped = _currentViewProjection.determinant() < 0;
 
     void submitItem(RenderItem item) {
       if (!item.visible || !item.primitiveVisible) return;
@@ -185,6 +186,13 @@ class VelocityPass extends RenderGraphPass {
 
       renderPass.clearBindings();
       renderPass.bindPipeline(pipeline);
+      // Match the color/depth pass for a reflected eye camera and mirrored
+      // objects; camera parity is not part of the object's world transform.
+      renderPass.setWindingOrder(
+        item.windingFlipped != cameraWindingFlipped
+            ? gpu.WindingOrder.counterClockwise
+            : gpu.WindingOrder.clockwise,
+      );
       renderPass.setPrimitiveType(item.geometry.primitiveType);
       renderPass.bindUniform(
         vertexShader.getUniformSlot('VelocityFrameInfo'),

@@ -1587,10 +1587,10 @@ final VertexLayoutDescriptor kUnskinnedSoADepthLayout = VertexLayoutDescriptor(
 /// passes, which drive the position-only shader but use the identical
 /// `FrameInfo` block; the slot is resolved against whichever shader the bound
 /// pipeline uses.
-// Reused across every call: this runs for every draw of every pass, and
-// [TransientWriter.emplace] copies the bytes out immediately, so a shared
-// scratch is safe and avoids a per-draw allocation.
-final Float32List _unskinnedFrameInfoScratch = Float32List(20);
+// The camera block is shared by unskinned meshes in a pass. Keep the uploaded
+// view with the pass so it cannot leak into a later frame after its transient
+// storage has been recycled. Pipeline changes still need a fresh bind below.
+final Expando<_UnskinnedFrameInfoCache> _unskinnedFrameInfoByPass = Expando();
 
 @internal
 void bindUnskinnedFrameInfo(
@@ -1601,17 +1601,54 @@ void bindUnskinnedFrameInfo(
   vm.Vector3 cameraPosition, {
   double depthBias = 0.0,
 }) {
-  final frameInfoSlot = shader.getUniformSlot('FrameInfo');
-  final scratch = _unskinnedFrameInfoScratch
-    ..setAll(0, cameraTransform.storage)
-    ..[16] = cameraPosition.x
-    ..[17] = cameraPosition.y
-    ..[18] = cameraPosition.z
-    ..[19] = depthBias;
+  var cache = _unskinnedFrameInfoByPass[pass];
+  if (cache == null || !identical(cache.writer, transientsBuffer)) {
+    cache = _UnskinnedFrameInfoCache(transientsBuffer);
+    _unskinnedFrameInfoByPass[pass] = cache;
+  }
   pass.bindUniform(
-    frameInfoSlot,
-    transientsBuffer.emplace(ByteData.sublistView(scratch)),
+    shader.getUniformSlot('FrameInfo'),
+    cache.viewFor(cameraTransform, cameraPosition, depthBias),
   );
+}
+
+class _UnskinnedFrameInfoCache {
+  _UnskinnedFrameInfoCache(this.writer);
+
+  final TransientWriter writer;
+  final Float32List _values = Float32List(20);
+  late final ByteData _bytes = ByteData.sublistView(_values);
+  gpu.BufferView? _view;
+  double _depthBias = 0.0;
+
+  gpu.BufferView viewFor(
+    vm.Matrix4 cameraTransform,
+    vm.Vector3 cameraPosition,
+    double depthBias,
+  ) {
+    final matrix = cameraTransform.storage;
+    var unchanged =
+        _view != null &&
+        _values[16] == cameraPosition.x &&
+        _values[17] == cameraPosition.y &&
+        _values[18] == cameraPosition.z &&
+        _depthBias == depthBias;
+    // Compare values without copying a key per draw. Identity alone would
+    // miss an in-place camera edit by a custom pass using this same helper.
+    for (var i = 0; unchanged && i < 16; i++) {
+      unchanged = _values[i] == matrix[i];
+    }
+    if (unchanged) return _view!;
+
+    _values
+      ..setAll(0, matrix)
+      ..[16] = cameraPosition.x
+      ..[17] = cameraPosition.y
+      ..[18] = cameraPosition.z
+      ..[19] = depthBias;
+    _depthBias = depthBias;
+    return _view = writer.emplace(_bytes);
+  }
 }
 
 /// Slot 0 of a skinned mesh: the interleaved 104-byte vertex stream the

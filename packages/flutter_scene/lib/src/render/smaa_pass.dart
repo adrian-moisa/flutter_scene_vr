@@ -24,12 +24,17 @@ import 'package:vector_math/vector_math.dart' show Vector4;
 /// (MIT-style license; the required copyright notice is carried in
 /// shaders/smaa.glsl). The port notes live in that file too.
 class SmaaPass extends RenderGraphPass {
-  SmaaPass({required gpu.Texture output, required ui.Size dimensions})
-    : _output = output,
-      _dimensions = dimensions;
+  SmaaPass({
+    required gpu.Texture output,
+    required ui.Size dimensions,
+    FinalCommandBufferCallback? beforeSubmit,
+  }) : _output = output,
+       _dimensions = dimensions,
+       _beforeSubmit = beforeSubmit;
 
   final gpu.Texture _output;
   final ui.Size _dimensions;
+  final FinalCommandBufferCallback? _beforeSubmit;
 
   static final gpu.Shader _vertexShader =
       baseShaderLibrary['FullscreenVertex']!;
@@ -248,6 +253,7 @@ class SmaaPass extends RenderGraphPass {
       );
       renderPass.bindUniform(_blendShader.getUniformSlot('SmaaInfo'), infoView);
       drawCompat(renderPass, 6);
+      _beforeSubmit?.call(commandBuffer);
       rendererSubmissions.submit(commandBuffer);
     }
 

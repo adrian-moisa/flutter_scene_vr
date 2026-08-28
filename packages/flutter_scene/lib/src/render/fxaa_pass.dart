@@ -15,12 +15,17 @@ import 'package:flutter_scene/src/scene_encoder.dart' show resolvePipeline;
 /// and republishes it so after-tone-mapping effects receive the
 /// anti-aliased image.
 class FxaaPass extends RenderGraphPass {
-  FxaaPass({required gpu.Texture output, required ui.Size dimensions})
-    : _output = output,
-      _dimensions = dimensions;
+  FxaaPass({
+    required gpu.Texture output,
+    required ui.Size dimensions,
+    FinalCommandBufferCallback? beforeSubmit,
+  }) : _output = output,
+       _dimensions = dimensions,
+       _beforeSubmit = beforeSubmit;
 
   final gpu.Texture _output;
   final ui.Size _dimensions;
+  final FinalCommandBufferCallback? _beforeSubmit;
 
   static final gpu.Shader _vertexShader =
       baseShaderLibrary['FullscreenVertex']!;
@@ -83,6 +88,7 @@ class FxaaPass extends RenderGraphPass {
     );
 
     drawCompat(renderPass, 6);
+    _beforeSubmit?.call(commandBuffer);
     rendererSubmissions.submit(commandBuffer);
 
     context.blackboard.set(kDisplayColorBlackboardKey, _output);

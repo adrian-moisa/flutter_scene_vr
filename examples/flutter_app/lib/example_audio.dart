@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -74,7 +75,14 @@ class ExampleAudioState extends State<ExampleAudio> {
     scene.root.addComponent(engine);
     musicBus = engine.createBus('music');
     sfxBus = engine.createBus('sfx');
-    engine.loadClip('assets/sounds/pluck.wav').then((clip) => pluck = clip);
+    loadExample(this, () async {
+      final clip = await engine.loadClip('assets/sounds/pluck.wav');
+      if (!mounted) {
+        clip.dispose();
+        return;
+      }
+      pluck = clip;
+    });
     // Leave headroom under SoLoud's output clipper; the music is
     // mastered near full scale, so unity buses crunch when plucks land
     // on top.
@@ -109,6 +117,7 @@ class ExampleAudioState extends State<ExampleAudio> {
       if (response.statusCode != 200) {
         throw StateError('HTTP ${response.statusCode}');
       }
+      if (!mounted) return;
       final clip = await engine.loadClipFromBytes(
         'goldberg_aria',
         response.bodyBytes,
@@ -147,6 +156,8 @@ class ExampleAudioState extends State<ExampleAudio> {
 
   @override
   void dispose() {
+    scene.removeAll();
+    scene.root.removeComponent(engine);
     pluck?.dispose();
     music?.clip?.dispose();
     super.dispose();

@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 // Raw shader pair: a ShaderMaterial that owns both stages.
 //
 // The Toon example customizes only the fragment stage and lets the engine
@@ -44,7 +45,7 @@ class _ExampleRawShaderState extends State<ExampleRawShader> {
   @override
   void initState() {
     super.initState();
-    _load();
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {

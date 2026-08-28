@@ -21,8 +21,9 @@
 // In horizon mode the pass can also accumulate the bent normal (the mean
 // unoccluded direction), octahedrally packed view-space into the output's ba
 // channels; the material shader samples irradiance along it and derives cone
-// specular occlusion. The g channel is reserved for the screen-space
-// contact-shadow term and holds 1 (unshadowed) here.
+// specular occlusion.
+// AO output carries contact-shadow visibility in g; indirect-light output
+// instead uses rgb for radiance and a for visibility, leaving no contact channel.
 
 uniform sampler2D linear_depth;
 
@@ -210,7 +211,9 @@ void main() {
       InterleavedGradientNoise(gl_FragCoord.xy + vec2(47.0, 17.0));
 
   float contact_visibility = 1.0;
-  if (gtao.contact.w > 0.0) {
+  // Radiance output below does not carry the contact-shadow channel.
+  // Do not march it when that result cannot contribute to the output.
+  if (gtao.contact.w > 0.0 && !(gtao.params3.w > 0.0)) {
     contact_visibility = MarchContactShadow(origin, offset_noise);
   }
 
@@ -250,6 +253,11 @@ void main() {
       if (j >= step_count) {
         break;
       }
+      // The mask only gains bits. Once every sector is covered, later taps
+      // cannot change visibility or contribute any newly occluded GI sectors.
+      if (use_bitmask && occluded_sectors == 0xFFFFFFFFu) {
+        break;
+      }
       // March at least one pixel per step so short radii still walk distinct
       // depth texels.
       float pixel_offset = max((float(j) + offset_noise) * step_radius,
@@ -284,22 +292,33 @@ void main() {
           if (fresh0 != 0u) {
             vec3 dir0 = normalize(delta0);
             float receiver0 = max(dot(normal, dir0), 0.0);
-            vec3 emitter_n0 = -cross(normalize(sample0 - last_sample0), axis);
-            float emitter0 = max(dot(emitter_n0, -dir0), 0.0);
-            vec3 rad0 = texture(scene_radiance, HistoryUv(sample0, uv0)).rgb;
-            rad0 *= 8.0 / max(8.0, dot(rad0, vec3(0.299, 0.587, 0.114)));
-            gi_sum += rad0 * (float(CountBits(fresh0)) / float(kSectorCount)) *
-                      receiver0 * emitter0;
+            // A zero cosine makes the whole contribution zero. Preserve the
+            // original arithmetic for contributing taps, while skipping their
+            // history reprojection and texture read when either face is away.
+            if (receiver0 > 0.0) {
+              vec3 emitter_n0 = -cross(normalize(sample0 - last_sample0), axis);
+              float emitter0 = max(dot(emitter_n0, -dir0), 0.0);
+              if (emitter0 > 0.0) {
+                vec3 rad0 = texture(scene_radiance, HistoryUv(sample0, uv0)).rgb;
+                rad0 *= 8.0 / max(8.0, dot(rad0, vec3(0.299, 0.587, 0.114)));
+                gi_sum += rad0 * (float(CountBits(fresh0)) / float(kSectorCount)) *
+                          receiver0 * emitter0;
+              }
+            }
           }
           if (fresh1 != 0u) {
             vec3 dir1 = normalize(delta1);
             float receiver1 = max(dot(normal, dir1), 0.0);
-            vec3 emitter_n1 = cross(normalize(sample1 - last_sample1), axis);
-            float emitter1 = max(dot(emitter_n1, -dir1), 0.0);
-            vec3 rad1 = texture(scene_radiance, HistoryUv(sample1, uv1)).rgb;
-            rad1 *= 8.0 / max(8.0, dot(rad1, vec3(0.299, 0.587, 0.114)));
-            gi_sum += rad1 * (float(CountBits(fresh1)) / float(kSectorCount)) *
-                      receiver1 * emitter1;
+            if (receiver1 > 0.0) {
+              vec3 emitter_n1 = cross(normalize(sample1 - last_sample1), axis);
+              float emitter1 = max(dot(emitter_n1, -dir1), 0.0);
+              if (emitter1 > 0.0) {
+                vec3 rad1 = texture(scene_radiance, HistoryUv(sample1, uv1)).rgb;
+                rad1 *= 8.0 / max(8.0, dot(rad1, vec3(0.299, 0.587, 0.114)));
+                gi_sum += rad1 * (float(CountBits(fresh1)) / float(kSectorCount)) *
+                          receiver1 * emitter1;
+              }
+            }
           }
         }
         last_sample0 = sample0;

@@ -56,8 +56,12 @@ class SoloudAudioEngine extends AudioEngine with WidgetsBindingObserver {
     }
     _soloud.setMaxActiveVoiceCount(maxActiveVoices);
     _master._pushNative();
-    WidgetsBinding.instance.addObserver(this);
-    _observing = true;
+    // A gallery switch can detach this engine while native initialization is
+    // pending. Do not retain the retired scene as a lifecycle observer.
+    if (isAttached) {
+      WidgetsBinding.instance.addObserver(this);
+      _observing = true;
+    }
     _ready.complete();
   }
 

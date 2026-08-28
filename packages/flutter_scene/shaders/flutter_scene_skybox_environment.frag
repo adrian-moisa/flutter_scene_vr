@@ -56,7 +56,10 @@ void main() {
   vec3 blurred = SampleRadianceEnv(prefiltered_radiance, direction, blurriness);
 
   vec3 radiance;
-  if (skybox_info.has_background > 0.5) {
+  // At the end of the handoff the sharp source contributes zero, so skip
+  // its equirectangular projection, texture read, and display decoding.
+  if (skybox_info.has_background > 0.5 &&
+      blurriness < kBackgroundSharpHandoff) {
     // Sample the full-res source for a sharp sky, blending toward the cube as
     // blurriness rises (the cube already encodes the roughness blur). The
     // source stores up at the top (V = 0), so flip V to match

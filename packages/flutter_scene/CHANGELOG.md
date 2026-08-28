@@ -1,3 +1,53 @@
+## Unreleased - OpenXR support
+
+Adds an experimental Android/Quest OpenXR host and adapts the existing example
+gallery to tracked stereo rendering. The core change separates scene rendering
+from Flutter Canvas presentation: a host can supply its own final GPU targets
+while retaining Flutter Scene's materials, lighting, and post-processing.
+
+The renderer APIs are independent of OpenXR; session, controller, and Android
+integration live in `flutter_scene_openxr`. Native direct rendering requires the
+companion Flutter framework/engine fork. Its external-surface APIs and completion
+bridge are prerequisites, not SDK changes included in this repository.
+
+### Renderer and presentation
+
+* Added `Scene.renderViewsToTargets`, `TargetedRenderView`, and texture/surface-frame color targets. Both eyes observe one scene update, avoiding double simulation and animation advancement. Final color goes directly to the supplied targets; intermediate HDR, depth, MSAA, shadows, and post-processing remain renderer-owned. Ordinary `SceneView`/Canvas presentation remains available.
+* Made final-target ownership explicit. Raw textures stay caller-owned; acquired surface frames must be presented or discarded. `beforeSubmit` reaches only the last color-writing pass, because resolve, anti-aliasing, custom effects, or outlines may finish the image. Presentation is associated with that exact command buffer; submission alone does not establish GPU completion.
+* Added `SceneViewPresentation` to replace presentation and frame timing without rebuilding example scenes. It preserves declarative children, loading gates, and callbacks while disabling the hidden flat ticker. Canvas warm-up is skipped for external presentation, so initial eye frames may still compile pipelines.
+* Corrected asymmetric eye projection and reflected-camera winding across color, depth, velocity, and object-mask passes. Camera handedness stays separate from model/instance winding, preserving geometry and shadow-caster conventions.
+* Added a final display-output pass for external sRGB attachments and optional backgrounds. Display effects keep their existing encoded-color contract; conversion occurs after the complete chain to avoid double encoding. The galleries share a backdrop without changing lighting or exposure. This correction can add a final fullscreen GPU pass.
+
+### Rendering cost
+
+* Added optional stereo shadow groups. Compatible adjacent views share directional/spot atlas work, with directional cascades covering both frusta and a separate group cache. Incompatible layers, projections, and custom/view-dependent cases keep independent rendering. Sharing avoids duplicate caster work, but does not remove each eye's shadow-receiver cost.
+* Added `DirectionalShadowFilter.hard` and compiled standard-material variants, allowing mobile drivers to omit soft-filter loops. This is an explicit sharp-shadow quality option, not a universal replacement for filtered shadows; other materials retain a runtime fallback.
+* Retained indirect-light color history separately per view through texture-pool leases. This removes the history copy while preventing cross-eye sampling and premature reuse of a retained attachment. Depth-only prepasses and AO mip levels use single-channel float textures; normal/roughness consumers retain the wider format.
+* Reused camera/depth uniform uploads and constant material buffers. Standard materials skip known-white placeholder samples; skybox and GTAO paths skip noncontributing samples. Depth-of-field kernels cache tap distances and use bilinear tent filtering. These reduce repeated work without claiming a measured speedup across the gallery.
+
+### Android OpenXR host
+
+* Added native session pacing, tracked eye/controller data, and direct eye-swapchain rendering. The host shares GLES textures with Flutter; the companion bridge creates FBOs in Flutter's own context, since framebuffer names cannot be shared between contexts. The world no longer travels through a full-size Flutter stereo surface and native eye-copy stage.
+* Matched each acquired eye to a frame token and pose sequence. Native release waits for both terminal callbacks after GPU completion. Cancellation discards queued frames; unresolved ownership tears down rather than recycles possibly busy images. Scene switching waits for this boundary before replacing the Dart renderer.
+* Kept Flutter controls in a separate UI atlas with movable compositor panels. Native hit testing supports trigger clicks, scrolling, grip dragging, depth adjustment, and reset; controller rays and rig navigation preserve head tracking. Panels can move without repainting their widget textures.
+* Added a native FPS/UI toggle that suspends widget frame callbacks and panel capture/copy work while scene rendering and statistics continue. Bounded graphs distinguish scene updates, completed stereo frames, Flutter timing, and optional runtime metrics; direct-render wall time includes handoff/wait and is not a GPU timer.
+
+### Gallery and integration
+
+* Unified flat and Quest presentation around one 44-entry registry, including the original VR demo, without copying the upstream scenes. Authored defaults remain the starting point. Flat/VR transitions retain selection but restart settings and simulation; the hidden flat activity unmounts its scene to avoid duplicate simulation/audio. Load guards and SoLoud lifecycle checks handle examples retired during initialization.
+* Added shared graphics presets, per-example session-only Custom settings, and live resolution controls. Quest replaces both eye swapchains between completed frames and keeps the previous pair on allocation failure. UI resolution stays independent. Web gains orbit, keyboard movement, zoom/reset, and performance readouts; headset panels use larger text and expandable diagnostics.
+* Added the Android host, local-engine build/deploy helpers, and [fork setup guide](README.md). Generated assets remain owned by `example_app` and `flutter_scene`, avoiding duplicate model/material/shader registrations. Raw asset aliases preserve existing example loads. Fixed web image resizing without relying on unsupported descriptor access.
+
+### Limits and verification
+
+* Native external surfaces currently require Android/GLES and matching companion SDK artifacts. The host assumes one active immersive session; GPU completion still involves blocking synchronization. Multiview and foveated rendering remain future work; this is not stock-Flutter or general cross-platform XR support.
+* Multiplayer, DICOM Volume, External Texture, and Split Screen remain flat-only. World-space widget picking and viewport gestures need XR adapters; planar reflections share the first eye's capture. Custom depth-reconstruction uniforms still assume a symmetric camera, and TAA state remains shared across views. Full stereo/input parity and sustained performance across the gallery remain unverified.
+* Added GPU-dependent direct-target tests for scene ticking, target validation, and submission ordering. These do not verify native borrowed-image completion or headset output. The [gallery report](../../examples/openxr_quest/GALLERY_VR_REPORT.md) records build checks and per-example coverage, with device checks kept separate from compilation evidence.
+
+The [direct-rendering notes](../../examples/openxr_quest/DIRECT_SWAPCHAIN_RENDERING.md)
+retain the architecture and experiment history. Earlier FPS observations describe
+specific artifacts and settings, not performance guarantees for this contribution.
+
 ## 0.23.0
 
 * Build hooks no longer crash on a target OS `package:code_assets` cannot name, which is how a third-party embedder announces tvOS or visionOS.

@@ -1,5 +1,21 @@
 part of '_gpu.dart';
 
+enum GpuPresentStatus { success, suboptimal, outOfDate }
+
+abstract interface class GpuSurfaceFrame {
+  Texture get colorTexture;
+
+  GpuPresentStatus present(CommandBuffer commandBuffer);
+
+  void discard();
+}
+
+class GpuImageSurface {
+  GpuSurfaceFrame acquireNextFrame() => _stub();
+
+  ui.Image? get currentImage => _stub();
+}
+
 class Surface {
   Surface({required int width, required int height}) {
     throw UnimplementedError(

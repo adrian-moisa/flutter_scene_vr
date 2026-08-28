@@ -18,7 +18,7 @@ abstract final class ExampleOverlay {
   static const double pickerReservation = 224;
 
   /// Width reserved for the shared settings button (top-right).
-  static const double settingsReservation = 64;
+  static const double settingsReservation = 116;
 
   static const double _sidePanelWidth = 340;
 

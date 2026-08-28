@@ -109,23 +109,29 @@ vec2 FixedShadowTap(int i) {
   return vec2(float(i - 14) - 1.0, 1.0);
 }
 
-// Samples one cascade's tile of the shadow atlas strip. `biased_world_pos` is
-// the world-space receiver after normal bias.
-float SampleCascade(int cascade, int count, mat4 cascade_matrix, float box,
-                    vec3 biased_world_pos) {
-  vec4 light_clip = cascade_matrix * vec4(biased_world_pos, 1.0);
-  vec3 proj = light_clip.xyz / light_clip.w;
-  vec2 uv = proj.xy * 0.5 + 0.5;
+// Samples a cascade with the coordinates already used to check its coverage.
+// Reusing that projection avoids another world-to-light transform and divide
+// for every shaded fragment, including both cascades in an overlap band.
+float SampleCascade(int cascade, int count, float box, vec2 uv,
+                    float projected_depth) {
   // The depth bias is world-space; convert it to this cascade's clip-z (its
   // orthographic depth range is 7 * box: the toward-sun reach + forward margin
   // in light.dart, _casterReachRadii + _forwardMarginRadii, over the half-width
   // that makes box) so a caster crosses the shadow threshold at the same world
   // height in every cascade, with no discontinuity where cascades meet.
-  float receiver_depth = proj.z - frag_info.shadow_bias / (7.0 * box);
+  float receiver_depth = projected_depth - frag_info.shadow_bias / (7.0 * box);
 
   // The atlas also holds spot-shadow tiles after the cascades, so normalize the
   // atlas-x by the total tile count. Spot count 0 leaves this at 1 / cascades.
   float inv_count = 1.0 / (float(count) + frag_info.spot_shadow_params.x);
+
+#ifdef FLUTTER_SCENE_HARD_SHADOWS
+  vec2 cuv = clamp(uv, vec2(frag_info.shadow_texel_size),
+                   vec2(1.0 - frag_info.shadow_texel_size));
+  vec2 atlas_uv = vec2((float(cascade) + cuv.x) * inv_count, 1.0 - cuv.y);
+  float caster_depth = texture(shadow_map, atlas_uv).r;
+  float shadow = receiver_depth <= caster_depth ? 1.0 : 0.0;
+#else
 
   // Select the tap positions without duplicating the texture samples in both
   // branches. Duplicating both kernels here expands to 33 samples per cascade
@@ -173,7 +179,12 @@ float SampleCascade(int cascade, int count, mat4 cascade_matrix, float box,
   // TODO(flutter_scene): use file-scope const arrays once impellerc/SPIRV-Cross
   // emits valid ES 1.00 array constructors for them.
   float shadow = 0.0;
-  if (filter_index > 2.5) {
+  if (filter_index > 3.5) {
+    // Materials without a compiled hard-shadow variant still honor the filter.
+    // Keep this fallback even though standard PBR selects the specialized shader.
+    shadow = ShadowTap(vec2(0.0), 1.0, 0.0, 0.0, uv, cascade, inv_count,
+                       receiver_depth);
+  } else if (filter_index > 2.5) {
     // 4-tap bilinear PCF: 4 taps x 4 texels = 16 samples total (matching the
     // 16-sample budget), producing continuous analog filtering with zero
     // noise rotation or stepped banding.
@@ -197,6 +208,7 @@ float SampleCascade(int cascade, int count, mat4 cascade_matrix, float box,
     }
     shadow = lit / float(sample_count);
   }
+#endif
 
   // Only the last cascade has a real outer edge (inner cascades hand
   // off to the next), so fade just it back to lit at the boundary.
@@ -222,7 +234,7 @@ float CascadeBlendWeight(vec2 uv, float margin, float band) {
   return band > 0.0 ? ramp.x * ramp.y : 1.0;
 }
 
-// Soft cascaded-shadow lookup. Returns 1.0 (lit) .. 0.0 (fully
+// Cascaded-shadow lookup. Returns 1.0 (lit) .. 0.0 (fully
 // shadowed). `world_pos` and `n` are world-space; `n` is the geometric
 // normal. Walks the cascades highest-resolution first, taking from each the
 // weight its tile still has room for.
@@ -245,8 +257,7 @@ float CascadeBlendWeight(vec2 uv, float margin, float band) {
       float take = min(CascadeBlendWeight(uv, margin, band),                 \
                        1.0 - weight);                                        \
       if (take > 0.0) {                                                      \
-        shadow_sum += take * SampleCascade(IDX, count, cascade_matrix, box,  \
-                                           biased_world_pos);                \
+        shadow_sum += take * SampleCascade(IDX, count, box, uv, proj.z);       \
         weight += take;                                                      \
       }                                                                      \
     }                                                                        \

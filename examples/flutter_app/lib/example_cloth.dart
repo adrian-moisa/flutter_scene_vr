@@ -1,3 +1,4 @@
+import 'example_loading.dart';
 // Cloth example: a CPU cloth solver driving updatable MeshGeometry, shaded by
 // the ClothFabric material.
 //
@@ -173,7 +174,7 @@ class _ClothStageState extends State<_ClothStage> {
     // dropdown (which takes focus and never hands it back) cannot strand the
     // camera. Nothing in this example accepts typed text.
     HardwareKeyboard.instance.addHandler(_camera.handleKey);
-    _load();
+    loadExample(this, _load);
   }
 
   Future<void> _load() async {
