@@ -70,6 +70,28 @@ class UnlitMaterial extends Material {
   /// applies it.
   double vertexColorWeight = 1.0;
 
+  /// Creates an independent material that retains this material's authored
+  /// presentation while replacing only its base-color texture.
+  ///
+  /// The texture transform and coordinate channel deliberately stay unchanged
+  /// so editor overrides continue to follow the source asset's UV mapping.
+  UnlitMaterial copyWithBaseColorTexture(TextureSource? texture) =>
+      UnlitMaterial(colorTexture: texture)
+        ..name = name
+        ..doubleSided = doubleSided
+        ..depthBias = depthBias
+        ..lodFade = lodFade
+        ..lightChannelMask = lightChannelMask
+        ..modelScaleX = modelScaleX
+        ..modelScaleY = modelScaleY
+        ..modelScaleZ = modelScaleZ
+        ..planarReflectionFrame = planarReflectionFrame
+        ..baseColorTextureTransform = baseColorTextureTransform.clone()
+        ..baseColorTextureTexCoord = baseColorTextureTexCoord
+        ..alphaMode = alphaMode
+        ..baseColorFactor = baseColorFactor.clone()
+        ..vertexColorWeight = vertexColorWeight;
+
   @override
   void bind(
     gpu.RenderPass pass,

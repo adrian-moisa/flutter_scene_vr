@@ -71,6 +71,10 @@ class RenderItem {
   /// not intersect (`layers & layerMask == 0`).
   int layers = kRenderLayerAll;
 
+  /// Whether this item draws in the separate, fresh-depth overlay pass rather
+  /// than the ordinary world pass. Refreshed from `Node.renderOnTop`.
+  bool renderOnTop = false;
+
   /// The owning node's light channels (an 8-bit bitmask), refreshed each
   /// frame. A light shades this item only when its own channel mask
   /// intersects (`light.channelMask & lightChannelMask != 0`), and a
@@ -768,6 +772,7 @@ class RenderScene {
     void collect(RenderItem item) {
       if (!item.visible ||
           !item.primitiveVisible ||
+          item.renderOnTop ||
           (item.layers & layerMask) == 0) {
         return;
       }
@@ -794,6 +799,7 @@ class RenderScene {
   Set<RenderInput> collectAllMaterialInputs() {
     final inputs = <RenderInput>{};
     for (final item in items) {
+      if (item.renderOnTop) continue;
       inputs.addAll(item.material.sceneInputs);
       final lod = item.lod;
       if (lod != null) {

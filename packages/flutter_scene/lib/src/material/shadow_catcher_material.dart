@@ -14,6 +14,8 @@ import 'package:flutter_scene/src/render/frame_transients.dart';
 
 /// How a [ShadowCatcherMaterial] evaluates its shadow term each frame.
 /// {@category Materials}
+enum ShadowCatcherStyle { soft, pastel, watercolor }
+
 enum ShadowCatcherMode {
   /// The shadow atlas (cascades plus spot tiles) is sampled per fragment
   /// every frame. Always correct, including moving lights and casters.
@@ -87,13 +89,52 @@ class ShadowCatcherMaterial extends Material {
     double fadeStart = 0.0,
     double fadeEnd = 0.0,
     ShadowCatcherMode mode = ShadowCatcherMode.live,
-  }) : _shadowColor = shadowColor,
+    this.depthPrepass = true,
+    this.automaticBake = true,
+    this.cacheResolution,
+    ShadowCatcherStyle style = ShadowCatcherStyle.soft,
+  }) : _style = style,
+       _shadowColor = shadowColor,
        _shadowIntensity = shadowIntensity,
        _aoStrength = aoStrength,
        _softness = softness,
        _fadeStart = fadeStart,
        _fadeEnd = fadeEnd,
        _mode = mode;
+
+  /// Virtual receivers can leave the camera depth buffer untouched.
+  final bool depthPrepass;
+
+  /// False lets a caller provide camera-independent regional bakes.
+  final bool automaticBake;
+
+  /// Optional fixed receiver resolution for bounded tile caches.
+  final int? cacheResolution;
+  gpu.Texture? get bakedTexture => _bakedTexture;
+  Vector4 get bakedRegion => _bakedRegion.clone();
+
+  /// Maps a guttered bake to a smaller displayed receiver without overlapping
+  /// neighbouring tiles. The mapping uses local XZ coordinates, like bakedRegion.
+  void remapBakedRegion(Vector4 region) {
+    _bakedRegion = region.clone();
+    _paramsDirty = true;
+  }
+
+  /// Shares immutable baked coverage; tint and strength remain per receiver.
+  void copyBakedShadowFrom(ShadowCatcherMaterial source) {
+    final texture = source._bakedTexture;
+    if (texture != null && !identical(texture, _bakedTexture)) {
+      completeBake(texture, source._bakedRegion.clone());
+    }
+  }
+
+  ShadowCatcherStyle _style;
+  ShadowCatcherStyle get style => _style;
+  set style(ShadowCatcherStyle value) {
+    if (_style == value) return;
+    _style = value;
+    _paramsDirty = true;
+  }
 
   Color _shadowColor;
   double _shadowIntensity;
@@ -245,7 +286,7 @@ class ShadowCatcherMaterial extends Material {
   bool isOpaque() => false;
 
   @override
-  bool get depthPrepassParticipates => true;
+  bool get depthPrepassParticipates => depthPrepass;
 
   @override
   bool get drawsNothing => _shadowIntensity == 0;
@@ -286,6 +327,7 @@ class ShadowCatcherMaterial extends Material {
   /// Whether the bake pass must refresh this material's footprint cache.
   @internal
   bool get needsBakedShadowRefresh =>
+      automaticBake &&
       _mode == ShadowCatcherMode.baked &&
       _shadowIntensity != 0 &&
       (_bakeDirty || _bakedTexture == null);
@@ -391,6 +433,7 @@ class _ShadowCatcherVariant extends PreprocessedMaterial {
       ..setVec3('shadow_color', _linearColor(owner.shadowColor))
       ..setFloat('shadow_intensity', owner.shadowIntensity.clamp(0.0, 1.0))
       ..setFloat('ao_strength', owner.aoStrength.clamp(0.0, 1.0))
+      ..setInt('coverage_style', owner.style.index)
       ..setFloat('fade_start', owner.fadeStart)
       ..setFloat('fade_end', owner.fadeEnd)
       // Sample the cache only once a bake produced one; until then (and in

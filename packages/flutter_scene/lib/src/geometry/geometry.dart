@@ -139,6 +139,11 @@ abstract class Geometry {
   Float32List? _cpuNormals;
   Float32List? _cpuColors;
   Float32List? _cpuTangents;
+  int _raycastDataVersion = 0;
+
+  /// Changes whenever the retained CPU triangle stream is replaced.
+  @internal
+  int get raycastDataVersion => _raycastDataVersion;
 
   gpu.Shader? _vertexShader;
   String? _vertexShaderName;
@@ -385,6 +390,7 @@ abstract class Geometry {
 
     _cpuVertices = vertices;
     _cpuIndices = indices;
+    _raycastDataVersion++;
 
     _uploadStreams(
       _vertexStreamBytes(vertices, vertexCount),
@@ -498,6 +504,7 @@ abstract class Geometry {
     _cpuTangents = tangents;
     _cpuIndices = indices;
     _cpuVertices = null;
+    _raycastDataVersion++;
   }
 
   /// Internal: the retained CPU vertex/index data for scene raycasts. Either
@@ -991,6 +998,18 @@ abstract class Geometry {
   @internal
   ({gpu.Shader shader, VertexLayoutDescriptor layout})? get depthOnlyVertex =>
       null;
+
+  /// Optional position-only motion shader for geometry displaced on the GPU.
+  /// It implements the VelocityFrameInfo/VelocityModelInfo contract with the
+  /// geometry's position layout. Null retains the standard motion shader.
+  @internal
+  gpu.Shader? get velocityVertexShader => null;
+
+  /// Binds positions and any displacement resources for the motion pass.
+  /// Separate from depth binding because each shader owns its resource slots.
+  @internal
+  void bindVelocityPositionStream(gpu.RenderPass pass) =>
+      bindPositionStream(pass);
 }
 
 /// Geometry whose vertices use the unskinned 72-byte layout.

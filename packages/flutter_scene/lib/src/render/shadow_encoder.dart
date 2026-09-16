@@ -28,6 +28,7 @@ bool shadowCasterAccepted(
   ShadowCasterFilter filter,
   int casterChannelMask,
 ) {
+  if (item.renderOnTop) return false;
   if (filter == ShadowCasterFilter.staticOnly && !item.shadowStatic) {
     return false;
   }

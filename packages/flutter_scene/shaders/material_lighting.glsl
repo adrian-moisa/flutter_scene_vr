@@ -303,7 +303,8 @@ vec4 EvaluateLighting(MaterialInputs material) {
   // Diffuse occlusion: the material's (baked) occlusion modulated by the
   // screen-space ambient occlusion when it is enabled. Occlusion only ever
   // affects indirect lighting, never the analytic direct light below.
-  float occlusion = material.occlusion;
+  float underside = 1.0 - frag_info.shadow_art.x * smoothstep(0.0, 0.8, -GetWorldNormal().y);
+  float occlusion = min(material.occlusion, min(underside, BakedContactVisibility(v_position, GetWorldNormal())));
   vec3 diffuse_occlusion = vec3(occlusion);
   vec3 ao_bent_normal = vec3(0.0);
   float ao_bent_valid = 0.0;

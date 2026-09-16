@@ -7,10 +7,12 @@ uniform FrameInfo {
   mat4 camera_transform; // view-projection
   mat4 model_transform;  // node world transform
   vec4 camera_position;  // world-space camera position (xyz)
-  // x: half width in world units. yzw: unused.
+  // x: half width in world units. y: world-space camera depth bias.
   vec4 params;
 }
 frame_info;
+
+#include <depth_bias.glsl>
 
 // Per-vertex unit quad (slot 0): x selects the endpoint (0 start, 1 end),
 // y is the side of the ribbon (-1 or +1).
@@ -49,6 +51,8 @@ void main() {
     perp = -perp;
   }
   pos += perp * (frame_info.params.x * corner.y);
+  pos = ApplyDepthBias(pos, frame_info.camera_position.xyz, frame_info.params.y);
+  view = frame_info.camera_position.xyz - pos;
 
   // Camera-facing shading normal, perpendicular to both the segment and
   // the expansion direction.

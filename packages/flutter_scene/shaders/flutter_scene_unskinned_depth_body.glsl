@@ -36,12 +36,17 @@ in vec4 model_transform_3;
 // material's custom varyings can follow them with matching interpolant slots.
 
 void main() {
+#ifdef FLUTTER_SCENE_TERRAIN
+  vec3 in_position = TerrainPosition(position);
+#else
+#define in_position position
+#endif
   mat4 model_transform = mat4(model_transform_0, model_transform_1,
                               model_transform_2, model_transform_3);
-  vec4 model_position = model_transform * vec4(position, 1.0);
+  vec4 model_position = model_transform * vec4(in_position, 1.0);
 
   VertexInputs vertex;
-  vertex.position = position;
+  vertex.position = in_position;
   vertex.normal = vec3(0.0);
   vertex.tangent = vec4(0.0);
   vertex.world_position = model_position.xyz;

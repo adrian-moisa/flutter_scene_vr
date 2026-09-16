@@ -19,6 +19,18 @@
     "type": "vertex",
     "file": "shaders/flutter_scene_unskinned_depth.vert"
   },
+  "TerrainVertex": {
+    "type": "vertex",
+    "file": "shaders/flutter_scene_terrain.vert"
+  },
+  "TerrainDepthVertex": {
+    "type": "vertex",
+    "file": "shaders/flutter_scene_terrain_depth.vert"
+  },
+  "TerrainVelocityVertex": {
+    "type": "vertex",
+    "file": "shaders/flutter_scene_terrain_velocity.vert"
+  },
   "UnlitFragment": {
     "type": "fragment",
     "file": "shaders/flutter_scene_unlit.frag"
@@ -30,6 +42,18 @@
   "LineSegmentsVertex": {
     "type": "vertex",
     "file": "shaders/flutter_scene_line_segments.vert"
+  },
+  "StrokeVertex": {
+    "type": "vertex",
+    "file": "shaders/flutter_scene_stroke.vert"
+  },
+  "StripeFragment": {
+    "type": "fragment",
+    "file": "shaders/flutter_scene_stripe.frag"
+  },
+  "StrokeFragment": {
+    "type": "fragment",
+    "file": "shaders/flutter_scene_stroke.frag"
   },
   "SpriteFragment": {
     "type": "fragment",
@@ -310,5 +334,17 @@
   "TaaFragment": {
     "type": "fragment",
     "file": "shaders/flutter_scene_taa.frag"
+  },
+  "RiverFragment": {
+    "type": "fragment",
+    "file": "shaders/flutter_scene_river.frag"
+  },
+  "PaperVertex": {
+    "type": "vertex",
+    "file": "shaders/flutter_scene_paper.vert"
+  },
+  "PaperFragment": {
+    "type": "fragment",
+    "file": "shaders/flutter_scene_paper.frag"
   }
 }

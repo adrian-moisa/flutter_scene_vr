@@ -33,7 +33,10 @@ class SharedShadowFrame {
   final skinnedShader = baseShaderLibrary['SkinnedVertex'];
   var hasStaticCasters = false;
   for (final item in scene.items) {
-    if (!item.visible || !item.castsShadows || !item.material.isOpaque()) {
+    if (item.renderOnTop ||
+        !item.visible ||
+        !item.castsShadows ||
+        !item.material.isOpaque()) {
       continue;
     }
     hasStaticCasters |= item.shadowStatic;

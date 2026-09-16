@@ -25,13 +25,13 @@ import 'package:flutter_scene/src/render/irradiance_field.dart';
 /// [PhysicallyBasedMaterial] and `PreprocessedMaterial` use it so the lighting
 /// packing lives in one place.
 class EngineLightingUniforms {
-  /// The float count of the full `FragInfo` block (784 bytes / 196 floats:
+  /// The float count of the full `FragInfo` block (816 bytes / 204 floats:
   /// the mat4 `environment_transform` ends at float 155, the `ssao_params`
   /// vec4 at floats 156..159, then the `radiance_blend` vec4 at floats
   /// 160..163, `ssao_lighting` at 164..167, `model_scale` at 168..171,
   /// `dielectric_f0` at 172..175, and the five irradiance-field vec4s at
   /// 176..195). See the layout map in the implementation.
-  static const fragInfoFloatCount = 196;
+  static const fragInfoFloatCount = 204;
 
   /// Index of the `dielectric_f0` vec4 in `FragInfo`. [packInto] writes the
   /// standard 0.04 dielectric reflectance; a material with a non-default
@@ -72,7 +72,28 @@ class EngineLightingUniforms {
     double modelScaleX = 1.0,
     double modelScaleY = 1.0,
     double modelScaleZ = 1.0,
+    double undersideShadowStrength = 0,
+    double contactShadowStrength = 0,
   }) {
+    fragInfo[196] = undersideShadowStrength.clamp(0.0, 1.0);
+    final shadowField = lighting.directionalLight?.bakedShadowField;
+    final activeField =
+        shadowField != null &&
+        identical(lighting.shadowMap, shadowField.texture);
+    fragInfo[197] = activeField
+        ? shadowField.sunLayers + (shadowField.hasContact ? 8.0 : 0.0)
+        : 1;
+    fragInfo[198] = activeField && shadowField.hasContact
+        ? contactShadowStrength.clamp(0.0, 1.0)
+        : 0;
+    fragInfo[199] = lighting.directionalLight?.shadowOpacity ?? 1;
+    fragInfo.fillRange(200, 204, 0);
+    if (activeField) {
+      fragInfo[200] = shadowField.center.x;
+      fragInfo[201] = shadowField.center.y;
+      fragInfo[202] = shadowField.center.z;
+      fragInfo[203] = shadowField.radius;
+    }
     // Default to fully drawn; a material with an active LOD cross-fade
     // overwrites this. Without it the zero-initialized slot would discard
     // every fragment.

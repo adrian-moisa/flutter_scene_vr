@@ -45,6 +45,9 @@ void main() {
 #ifdef FLUTTER_SCENE_MORPH_TARGETS
   vec3 in_position = MorphedPosition(position);
   vec3 in_normal = MorphedNormal(normal);
+#elif defined(FLUTTER_SCENE_TERRAIN)
+  vec3 in_position = TerrainPosition(position);
+  vec3 in_normal = TerrainNormal(position, normal);
 #else
 #define in_position position
 #define in_normal normal
@@ -59,7 +62,10 @@ void main() {
   vertex.normal = in_normal;
   vertex.tangent = tangent;
   vertex.world_position = model_position.xyz;
-  vertex.world_normal = mat3(model_transform) * in_normal;
+  // Normals are covectors: model scaling must not tilt the lighting away
+  // from the represented surface. This also covers per-instance transforms.
+  vertex.world_normal = normalize(
+      transpose(inverse(mat3(model_transform))) * in_normal);
   vec3 world_tangent = mat3(model_transform) * tangent.xyz;
   float tangent_length_squared = dot(world_tangent, world_tangent);
   float tangent_sign = determinant(mat3(model_transform)) < 0.0

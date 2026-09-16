@@ -51,6 +51,13 @@ class TextureTransform {
   /// Counter-clockwise rotation in radians.
   double rotation;
 
+  /// Copies the mutable UV vectors so per-instance edits stay independent.
+  TextureTransform clone() => TextureTransform(
+    offset: offset.clone(),
+    scale: scale.clone(),
+    rotation: rotation,
+  );
+
   /// Whether this transform leaves UV coordinates unchanged.
   bool get isIdentity =>
       offset == Vector2.zero() && scale == Vector2.all(1.0) && rotation == 0.0;
@@ -149,6 +156,74 @@ class PhysicallyBasedMaterial extends Material {
   set baseColorTexture(TextureSource? value) {
     if (identical(_baseColorTexture, value)) return;
     _baseColorTexture = value;
+    _markMaterialDataDirty();
+  }
+
+  /// World-space tile size for triplanar base color on the standard material.
+  /// Zero preserves ordinary glTF UV sampling. Positive values project across
+  /// all three world axes so resized geometry retains the authored tile size.
+  double get baseColorWorldScale => _baseColorWorldScale;
+  double _baseColorWorldScale = 0;
+  set baseColorWorldScale(double value) {
+    if (_baseColorWorldScale == value) return;
+    _baseColorWorldScale = value;
+    _markMaterialDataDirty();
+  }
+
+  /// Texture contribution for world projection: zero is the base color and
+  /// one is the image. It blends linear RGB, independently of surface alpha.
+  double get baseColorWorldTextureWeight => _baseColorWorldTextureWeight;
+  double _baseColorWorldTextureWeight = 1;
+  set baseColorWorldTextureWeight(double value) {
+    if (_baseColorWorldTextureWeight == value) return;
+    _baseColorWorldTextureWeight = value;
+    _markMaterialDataDirty();
+  }
+
+  /// Optional second world-projected color for steep surfaces. Null preserves
+  /// the single-texture path. Slope uses the unperturbed world normal, so object
+  /// scale/rotation and terrain displacement participate without mesh rebuilds.
+  TextureSource? get cliffColorTexture => _cliffColorTexture;
+  TextureSource? _cliffColorTexture;
+  set cliffColorTexture(TextureSource? value) {
+    if (identical(_cliffColorTexture, value)) return;
+    _cliffColorTexture = value;
+    _markMaterialDataDirty();
+  }
+
+  /// World-space tile size of the cliff texture in meters.
+  double get cliffColorWorldScale => _cliffColorWorldScale;
+  double _cliffColorWorldScale = 5;
+  set cliffColorWorldScale(double value) {
+    if (_cliffColorWorldScale == value) return;
+    _cliffColorWorldScale = value;
+    _markMaterialDataDirty();
+  }
+
+  /// Linear cliff image contribution, independently of surface alpha.
+  double get cliffColorTextureWeight => _cliffColorTextureWeight;
+  double _cliffColorTextureWeight = 1;
+  set cliffColorTextureWeight(double value) {
+    if (_cliffColorTextureWeight == value) return;
+    _cliffColorTextureWeight = value;
+    _markMaterialDataDirty();
+  }
+
+  /// Slope angle at which the cliff image has fully replaced gentle color.
+  double get cliffAngleDegrees => _cliffAngleDegrees;
+  double _cliffAngleDegrees = 75;
+  set cliffAngleDegrees(double value) {
+    if (_cliffAngleDegrees == value) return;
+    _cliffAngleDegrees = value;
+    _markMaterialDataDirty();
+  }
+
+  /// Angular width of the smooth transition below the cliff angle.
+  double get cliffBlendDegrees => _cliffBlendDegrees;
+  double _cliffBlendDegrees = 15;
+  set cliffBlendDegrees(double value) {
+    if (_cliffBlendDegrees == value) return;
+    _cliffBlendDegrees = value;
     _markMaterialDataDirty();
   }
 
@@ -1523,6 +1598,79 @@ class PhysicallyBasedMaterial extends Material {
   /// normals cannot over-roughen a surface. Default `0.2`.
   double specularAntiAliasingThreshold = 0.2;
 
+  /// Creates an independent material that retains every authored PBR slot and
+  /// factor while replacing only its base-color texture.
+  ///
+  /// The original base-color transform and texture-coordinate channel remain
+  /// intact, allowing an editor to swap imagery without changing source UVs.
+  PhysicallyBasedMaterial copyWithBaseColorTexture(TextureSource? texture) {
+    final copy = PhysicallyBasedMaterial(environment: environment);
+    copy._applyDescriptor(_toDescriptor());
+    // Descriptors share their vectors and transforms. Detach mutable values
+    // for per-instance edits while retaining the shared texture resources.
+    copy
+      ..baseColorFactor = baseColorFactor.clone()
+      ..emissiveFactor = emissiveFactor.clone()
+      ..specularColor = specularColor.clone()
+      ..clearcoatNormalScale = clearcoatNormalScale.clone()
+      ..sheenColor = sheenColor.clone()
+      ..diffuseTransmissionColor = diffuseTransmissionColor.clone()
+      ..attenuationColor = attenuationColor.clone()
+      ..baseColorTextureTransform = baseColorTextureTransform.clone()
+      ..metallicRoughnessTextureTransform = metallicRoughnessTextureTransform
+          .clone()
+      ..normalTextureTransform = normalTextureTransform.clone()
+      ..emissiveTextureTransform = emissiveTextureTransform.clone()
+      ..occlusionTextureTransform = occlusionTextureTransform.clone()
+      ..specularTextureTransform = specularTextureTransform.clone()
+      ..specularColorTextureTransform = specularColorTextureTransform.clone()
+      ..clearcoatTextureTransform = clearcoatTextureTransform.clone()
+      ..clearcoatRoughnessTextureTransform = clearcoatRoughnessTextureTransform
+          .clone()
+      ..clearcoatNormalTextureTransform = clearcoatNormalTextureTransform
+          .clone()
+      ..sheenColorTextureTransform = sheenColorTextureTransform.clone()
+      ..sheenRoughnessTextureTransform = sheenRoughnessTextureTransform.clone()
+      ..transmissionTextureTransform = transmissionTextureTransform.clone()
+      ..diffuseTransmissionTextureTransform =
+          diffuseTransmissionTextureTransform.clone()
+      ..diffuseTransmissionColorTextureTransform =
+          diffuseTransmissionColorTextureTransform.clone()
+      ..thicknessTextureTransform = thicknessTextureTransform.clone()
+      ..iridescenceTextureTransform = iridescenceTextureTransform.clone()
+      ..iridescenceThicknessTextureTransform =
+          iridescenceThicknessTextureTransform.clone()
+      ..anisotropyTextureTransform = anisotropyTextureTransform.clone()
+      // Lightmaps are not represented by PhysicalMaterialDescriptor.
+      ..lightmapTexture = lightmapTexture
+      ..lightmapTextureTransform = lightmapTextureTransform.clone()
+      ..lightmapTextureTexCoord = lightmapTextureTexCoord
+      ..lightmapIntensity = lightmapIntensity
+      ..lightmapRgbm = lightmapRgbm
+      ..baseColorTexture = texture
+      ..baseColorWorldScale = baseColorWorldScale
+      ..baseColorWorldTextureWeight = baseColorWorldTextureWeight
+      ..cliffColorTexture = cliffColorTexture
+      ..cliffColorWorldScale = cliffColorWorldScale
+      ..cliffColorTextureWeight = cliffColorTextureWeight
+      ..cliffAngleDegrees = cliffAngleDegrees
+      ..cliffBlendDegrees = cliffBlendDegrees
+      ..vertexColorWeight = vertexColorWeight
+      ..depthBias = depthBias
+      ..lodFade = lodFade
+      ..lightChannelMask = lightChannelMask
+      ..modelScaleX = modelScaleX
+      ..modelScaleY = modelScaleY
+      ..modelScaleZ = modelScaleZ
+      ..undersideShadowStrength = undersideShadowStrength
+      ..contactShadowStrength = contactShadowStrength
+      ..planarReflectionFrame = planarReflectionFrame
+      ..specularAntiAliasingVariance = specularAntiAliasingVariance
+      ..specularAntiAliasingThreshold = specularAntiAliasingThreshold;
+    copy._ensurePreparedVariant();
+    return copy;
+  }
+
   @override
   void bind(
     gpu.RenderPass pass,
@@ -1543,6 +1691,8 @@ class PhysicallyBasedMaterial extends Material {
         ..modelScaleX = modelScaleX
         ..modelScaleY = modelScaleY
         ..modelScaleZ = modelScaleZ
+        ..undersideShadowStrength = undersideShadowStrength
+        ..contactShadowStrength = contactShadowStrength
         ..environment = environment;
       prepared.bind(pass, transientsBuffer, lighting);
       return;
@@ -1583,6 +1733,8 @@ class PhysicallyBasedMaterial extends Material {
       modelScaleX: modelScaleX,
       modelScaleY: modelScaleY,
       modelScaleZ: modelScaleZ,
+      undersideShadowStrength: undersideShadowStrength,
+      contactShadowStrength: contactShadowStrength,
     );
     fragInfo[0] = baseColorFactor.r;
     fragInfo[1] = baseColorFactor.g;
@@ -1681,12 +1833,29 @@ class PhysicallyBasedMaterial extends Material {
     textureTransforms[23] = baseColorTexture == null ? 1.0 : 0.0;
     textureTransforms[31] = emissiveTexture == null ? 1.0 : 0.0;
     textureTransforms[39] = occlusionTexture == null ? 1.0 : 0.0;
+    textureTransforms[40] = baseColorTexture == null
+        ? 0.0
+        : baseColorWorldScale;
+    textureTransforms[41] = baseColorWorldTextureWeight;
+    textureTransforms[42] = 0.0;
+    textureTransforms[43] = 0.0;
+    textureTransforms[44] = cliffColorTexture == null
+        ? 0.0
+        : cliffColorWorldScale;
+    textureTransforms[45] = cliffColorTextureWeight;
+    final cliffEnd = cliffAngleDegrees.clamp(1.0, 90.0);
+    textureTransforms[46] =
+        math.max(0.0, cliffEnd - cliffBlendDegrees.clamp(1.0, 45.0)) *
+        math.pi /
+        180;
+    textureTransforms[47] = cliffEnd * math.pi / 180;
     pass.bindUniform(
       shader.getUniformSlot('TextureTransforms'),
       transientsBuffer.emplace(ByteData.sublistView(textureTransforms)),
     );
 
     _bindSlot(pass, shader, 'base_color_texture', baseColorTexture);
+    _bindSlot(pass, shader, 'cliff_color_texture', cliffColorTexture);
     _bindSlot(pass, shader, 'emissive_texture', emissiveTexture);
     _bindSlot(
       pass,
@@ -1734,7 +1903,7 @@ class PhysicallyBasedMaterial extends Material {
   );
   static final ByteData _fragInfoBytes = ByteData.sublistView(_fragInfoScratch);
 
-  static final Float32List _textureTransformsScratch = Float32List(40);
+  static final Float32List _textureTransformsScratch = Float32List(48);
 
   static void _packTextureTransform(
     Float32List target,

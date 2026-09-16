@@ -361,3 +361,59 @@ base class Texture {
     return _gpuContext.snapshotTextureSync(this);
   }
 }
+
+// Mirrors Flutter GPU's buffer-to-texture region copy on WebGL.
+// Keeping this beside Texture lets the hot path reuse its private GL context
+// and setup binding without widening the public renderer API.
+void overwriteTextureRegion(
+  Texture texture,
+  ByteData sourceBytes, {
+  required int x,
+  required int y,
+  required int width,
+  required int height,
+}) {
+  if (texture.sampleCount != 1) {
+    throw Exception('Cannot overwrite a multisample texture region');
+  }
+  if (texture.mipLevelCount != 1) {
+    throw Exception(
+      'Texture region uploads require a texture without mip levels',
+    );
+  }
+  if (texture.format != PixelFormat.r8g8b8a8UNormInt &&
+      texture.format != PixelFormat.r8g8b8a8UNormIntSRGB) {
+    throw Exception('Texture region uploads currently require RGBA8 pixels');
+  }
+  if (x < 0 ||
+      y < 0 ||
+      width < 1 ||
+      height < 1 ||
+      x + width > texture.width ||
+      y + height > texture.height) {
+    throw Exception('Texture region is outside the destination texture');
+  }
+  final expectedSize = width * height * texture.bytesPerTexel;
+  if (sourceBytes.lengthInBytes != expectedSize) {
+    throw Exception(
+      'sourceBytes length (${sourceBytes.lengthInBytes}) must equal region size ($expectedSize)',
+    );
+  }
+
+  final gl = texture._gpuContext._gl;
+  texture._gpuContext._bindTextureForSetup(texture.glTarget, texture._texture);
+  final view = sourceBytes.buffer
+      .asUint8List(sourceBytes.offsetInBytes, sourceBytes.lengthInBytes)
+      .toJS;
+  gl.texSubImage2D(
+    texture.glSliceTarget(0),
+    0,
+    x,
+    y,
+    width.toJS,
+    height.toJS,
+    texture._glFormat.format.toJS,
+    texture._glFormat.type,
+    view,
+  );
+}

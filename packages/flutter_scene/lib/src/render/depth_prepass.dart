@@ -411,6 +411,7 @@ class _DepthPrepassEncoder {
   /// catcher; translucent depth-writing items in the patch mode).
   void submit(RenderItem item) {
     if (!item.visible) return;
+    if (item.renderOnTop) return;
     if ((item.layers & _layerMask) == 0) return;
     if (_translucentPatch
         ? (item.material.isOpaque() || !item.material.translucentDepthWrite)

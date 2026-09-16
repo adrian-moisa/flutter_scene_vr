@@ -27,10 +27,15 @@ out vec4 v_previous_clip;
 out vec4 v_static_clip;
 
 void main() {
+#ifdef FLUTTER_SCENE_TERRAIN
+  vec3 in_position = TerrainPosition(position);
+#else
+#define in_position position
+#endif
   mat4 cur_model = mat4(model_transform_0, model_transform_1,
                         model_transform_2, model_transform_3);
-  vec4 cur_world = cur_model * vec4(position, 1.0);
-  vec4 prev_world = model_info.previous_model_transform * vec4(position, 1.0);
+  vec4 cur_world = cur_model * vec4(in_position, 1.0);
+  vec4 prev_world = model_info.previous_model_transform * vec4(in_position, 1.0);
 
   v_current_clip = frame_info.current_view_projection * cur_world;
   v_previous_clip = frame_info.previous_view_projection * prev_world;
@@ -38,4 +43,3 @@ void main() {
 
   gl_Position = v_current_clip;
 }
-

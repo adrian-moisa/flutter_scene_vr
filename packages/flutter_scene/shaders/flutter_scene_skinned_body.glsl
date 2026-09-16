@@ -88,7 +88,8 @@ void main() {
   }
 
   vec4 skinned_position = skin_matrix * vec4(in_position, 1.0);
-  vec3 skinned_normal = mat3(skin_matrix) * in_normal;
+  vec3 skinned_normal = normalize(
+      transpose(inverse(mat3(skin_matrix))) * in_normal);
   mat4 combined_transform = frame_info.model_transform * skin_matrix;
   vec4 model_position = combined_transform * vec4(in_position, 1.0);
 
@@ -97,7 +98,10 @@ void main() {
   vertex.normal = skinned_normal;
   vertex.tangent = vec4(mat3(skin_matrix) * tangent.xyz, tangent.w);
   vertex.world_position = model_position.xyz;
-  vertex.world_normal = mat3(combined_transform) * in_normal;
+  // The combined skin/node transform can include nonuniform scale, so
+  // normals need its inverse transpose rather than the position transform.
+  vertex.world_normal = normalize(
+      transpose(inverse(mat3(combined_transform))) * in_normal);
   vec3 world_tangent = mat3(combined_transform) * tangent.xyz;
   float tangent_length_squared = dot(world_tangent, world_tangent);
   float tangent_sign = determinant(mat3(combined_transform)) < 0.0

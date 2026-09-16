@@ -8,6 +8,7 @@
 #include <lod_fade.glsl>
 
 uniform sampler2D base_color_texture;
+uniform sampler2D cliff_color_texture;
 uniform sampler2D emissive_texture;
 uniform sampler2D metallic_roughness_texture;
 uniform sampler2D normal_texture;
@@ -30,8 +31,18 @@ uniform TextureTransforms {
   vec4 emissive_rotation;
   vec4 occlusion_transform;
   vec4 occlusion_rotation;
+  vec4 base_color_world; // tile size, texture weight, reserved, reserved
+  vec4 cliff_color_world; // tile size (zero disables), weight, fade start/end radians
 }
 texture_transforms;
+
+// Decode before mixing both projections and material layers. Explicit gradients
+// keep mip selection stable when neighboring fragments skip a slope layer.
+vec3 WorldColor(sampler2D image, vec3 position, vec3 weights, vec3 dx, vec3 dy) {
+  return SRGBToLinear(textureGrad(image, position.zy, dx.zy, dy.zy).rgb) * weights.x +
+         SRGBToLinear(textureGrad(image, position.xz, dx.xz, dy.xz).rgb) * weights.y +
+         SRGBToLinear(textureGrad(image, position.xy, dx.xy, dy.xy).rgb) * weights.z;
+}
 
 // Fills the surface description for the standard glTF metallic-roughness
 // material from the FragInfo parameters and the material textures. The shared
@@ -46,7 +57,21 @@ void Surface(inout MaterialInputs material) {
   bool transformed_uvs = texture_transforms.base_color_rotation.w > 0.5;
   vec4 base_color_srgb = vec4(1.0);
   vec3 base_color_linear = vec3(1.0);
-  if (texture_transforms.normal_rotation.w < 0.5) {
+  bool world_texture = texture_transforms.base_color_world.x > 0.0;
+  bool cliff_texture = texture_transforms.cliff_color_world.x > 0.0;
+  vec3 position = GetWorldPosition();
+  vec3 position_dx = dFdx(position), position_dy = dFdy(position);
+  vec3 world_normal = GetWorldNormal();
+  vec3 weights = vec3(0.0);
+  if (world_texture || cliff_texture) {
+    weights = pow(abs(world_normal), vec3(4.0));
+    weights /= max(weights.x + weights.y + weights.z, 0.00001);
+  }
+  if (world_texture) {
+    float scale = texture_transforms.base_color_world.x;
+    base_color_linear = WorldColor(base_color_texture, position / scale, weights,
+                                   position_dx / scale, position_dy / scale);
+  } else if (texture_transforms.normal_rotation.w < 0.5) {
     vec2 base_color_uv = transformed_uvs
         ? MaterialTextureUv(
               texture_transforms.base_color_transform,
@@ -56,6 +81,25 @@ void Surface(inout MaterialInputs material) {
     base_color_linear = SRGBToLinear(base_color_srgb.rgb);
   }
   vec3 albedo = base_color_linear * vertex_color.rgb * frag_info.color.rgb;
+  if (world_texture) {
+    albedo = mix(frag_info.color.rgb * vertex_color.rgb, base_color_linear,
+                 clamp(texture_transforms.base_color_world.y, 0.0, 1.0));
+  }
+  if (cliff_texture) {
+    // Absolute Y makes horizontal undersides gentle too and prevents
+    // double-sided normal reversal from changing the selected layer.
+    float angle = acos(clamp(abs(world_normal.y), 0.0, 1.0));
+    float blend = smoothstep(texture_transforms.cliff_color_world.z,
+                             texture_transforms.cliff_color_world.w, angle);
+    if (blend > 0.0) {
+      float scale = texture_transforms.cliff_color_world.x;
+      vec3 cliff = WorldColor(cliff_color_texture, position / scale, weights,
+                              position_dx / scale, position_dy / scale);
+      cliff = mix(frag_info.color.rgb * vertex_color.rgb, cliff,
+                   clamp(texture_transforms.cliff_color_world.y, 0.0, 1.0));
+      albedo = mix(albedo, cliff, blend);
+    }
+  }
   float alpha = base_color_srgb.a * vertex_color.a * frag_info.color.a;
   // MASK alpha mode: discard fragments below the cutoff, render the
   // rest fully opaque (glTF treats MASK output as binary). Done here, before

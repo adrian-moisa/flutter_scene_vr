@@ -60,6 +60,11 @@ gpu.SamplerOptions? textureSourceSampler(TextureSource? source) =>
 /// winding.
 /// {@category Materials}
 abstract class Material {
+  /// Artistic reduction of indirect light on downward-facing world normals.
+  double undersideShadowStrength = 0;
+
+  /// Amount of the optional camera-independent contact field received here.
+  double contactShadowStrength = 0;
   static gpu.Texture? _whitePlaceholderTexture;
 
   /// Returns a 1×1 opaque-white texture, lazily created on first use.
@@ -528,6 +533,18 @@ abstract class Material {
   /// ordered back-to-front.
   @internal
   bool get translucentDepthWrite => false;
+
+  /// Optional fixed-function compositing for a translucent material. Null uses
+  /// premultiplied source-over. The encoder resets this for every draw, so a
+  /// multiply annotation cannot change the blend of the next scene object.
+  gpu.ColorBlendEquation? get colorBlendEquation => null;
+
+  /// Optional authored stacking order for depth-tested translucent cards.
+  /// Null preserves ordinary back-to-front sorting. Ordered draws follow the
+  /// ordinary translucent run, lowest order first; depth testing stays enabled.
+  /// These draws should keep [translucentDepthWrite] false so one card cannot
+  /// prevent a higher authored layer from appearing above it.
+  int? get translucentOrder => null;
 
   /// Whether this material's geometry joins the camera depth prepass that
   /// feeds the screen-space chain (ambient occlusion, contact shadows,

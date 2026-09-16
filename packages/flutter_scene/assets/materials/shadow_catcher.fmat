@@ -10,6 +10,7 @@ material {
     { type: float, name: fade_start, default: 0 },
     { type: float, name: fade_end, default: 0 },
     { type: int, name: catcher_mode, default: 0 },
+    { type: int, name: coverage_style, default: 0 },
     { type: vec4, name: baked_region, default: [0, 0, 1, 1] },
     { type: sampler2d, name: baked_shadow_texture, hint: default_white },
   ],
@@ -90,6 +91,16 @@ fragment {
     return visibility;
   }
 
+  float PigmentNoise(vec2 p) {
+    vec2 cell = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = fract(sin(dot(cell, vec2(127.1,311.7))) * 43758.5453);
+    float b = fract(sin(dot(cell + vec2(1,0), vec2(127.1,311.7))) * 43758.5453);
+    float c = fract(sin(dot(cell + vec2(0,1), vec2(127.1,311.7))) * 43758.5453);
+    float d = fract(sin(dot(cell + vec2(1,1), vec2(127.1,311.7))) * 43758.5453);
+    return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
+  }
+
   void Surface(inout MaterialInputs material) {
     vec3 world_pos = GetWorldPosition();
     vec3 n = GetWorldNormal();
@@ -149,6 +160,18 @@ fragment {
     // TODO(shadow-catcher-fog): the catcher skips ApplyFog, so its overlay
     // does not lose contrast inside distance fog like lit surfaces do.
     float alpha = clamp(shadow_term + ao_term, 0.0, 1.0) * radial_fade;
+    // Stable local pigment changes coverage only. The filled shadow remains
+    // legible, and orbiting never moves the grain or regenerates a bitmap.
+    if (material_params.coverage_style == 1) {
+      vec2 p = world_pos.xz;
+      float grain = PigmentNoise(p * vec2(160.0, 90.0));
+      float strokes = PigmentNoise(p * vec2(8.0, 95.0));
+      alpha *= 0.66 + 0.18 * grain + 0.16 * strokes;
+    } else if (material_params.coverage_style == 2) {
+      float wash = PigmentNoise(world_pos.xz * 14.0);
+      float rim = 4.0 * shadow_visibility * (1.0 - shadow_visibility);
+      alpha *= 0.72 + 0.2 * wash + 0.08 * rim;
+    }
     material.base_color = vec4(material_params.shadow_color, alpha);
     PrepareMaterial(material);
   }

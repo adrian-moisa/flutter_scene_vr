@@ -101,7 +101,7 @@ export 'src/material/shader_material.dart'
     show ShaderInstanceAttribute, ShaderInstanceAttributeType, ShaderMaterial;
 export 'src/material/shader_stage.dart' show MeshVariant, ShaderStage;
 export 'src/material/shadow_catcher_material.dart'
-    show ShadowCatcherMaterial, ShadowCatcherMode;
+    show ShadowCatcherMaterial, ShadowCatcherMode, ShadowCatcherStyle;
 export 'src/material/sprite_material.dart' show SpriteBlendMode, SpriteMaterial;
 export 'src/material/unlit_material.dart' show UnlitMaterial;
 export 'src/fmat/material_registry.dart'
@@ -342,3 +342,8 @@ export 'src/widgets/scene_view.dart'
 export 'src/tone_mapping.dart' show ToneMappingMode;
 
 export 'src/widgets/scene_view_presentation.dart';
+
+export 'src/render/planar_shadow_baker.dart' show PlanarShadowBaker;
+
+export 'src/render/directional_shadow_field.dart'
+    show DirectionalShadowField, DirectionalShadowBaker;

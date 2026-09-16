@@ -117,6 +117,16 @@ base class Texture {
   ui.Image asImage() => _stub();
 }
 
+// Keeps the analyzer fallback aligned with both real region-upload backends.
+void overwriteTextureRegion(
+  Texture texture,
+  ByteData sourceBytes, {
+  required int x,
+  required int y,
+  required int width,
+  required int height,
+}) => _stub();
+
 base class UniformSlot {
   UniformSlot._() {
     _stub();

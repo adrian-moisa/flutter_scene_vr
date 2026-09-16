@@ -123,7 +123,15 @@ float SampleCascade(int cascade, int count, float box, vec2 uv,
 
   // The atlas also holds spot-shadow tiles after the cascades, so normalize the
   // atlas-x by the total tile count. Spot count 0 leaves this at 1 / cascades.
-  float inv_count = 1.0 / (float(count) + frag_info.spot_shadow_params.x);
+  float layers = frag_info.shadow_art.y;
+  bool regional = frag_info.shadow_region.w > 0.0;
+  float inv_count = 1.0 / (regional ? layers : float(count) + frag_info.spot_shadow_params.x);
+  int sun_layers = int(layers) > 8 ? int(layers) - 8 : int(layers);
+  float precise_visibility = 1.0;
+  if (regional && sun_layers == 2) {
+    precise_visibility = ShadowTap(vec2(0.0), 1.0, 0.0, 0.0, uv, cascade, inv_count, receiver_depth);
+    cascade += count;
+  }
 
 #ifdef FLUTTER_SCENE_HARD_SHADOWS
   vec2 cuv = clamp(uv, vec2(frag_info.shadow_texel_size),
@@ -218,7 +226,7 @@ float SampleCascade(int cascade, int count, float box, vec2 uv,
                 smoothstep(vec2(0.0), vec2(fade), vec2(1.0) - uv);
     shadow = mix(1.0, shadow, edge.x * edge.y);
   }
-  return shadow;
+  return min(precise_visibility, shadow);
 }
 
 // How much of a cascade this fragment takes, falling from 1 at `band` inside
@@ -283,7 +291,7 @@ float SampleShadow(vec3 world_pos, vec3 n) {
   _TRY_CASCADE(2)
   _TRY_CASCADE(3)
   // Weight no cascade covered reads as lit.
-  return shadow_sum + (1.0 - weight);
+  return mix(1.0, shadow_sum + (1.0 - weight), frag_info.shadow_art.w);
 }
 #undef _TRY_CASCADE
 #endif
@@ -377,3 +385,52 @@ float SampleSpotShadow(int light_row, int slot, vec3 world_pos, vec3 normal) {
   return lit / float(SPOT_PCF_RING + 1);
 }
 #endif
+
+
+// Normal-weighted visibility from eight cached directional raster views.
+// This is world-space contact occlusion, not a frozen screen-space AO image.
+float BakedContactTap(vec3 p, vec3 n, vec3 direction, float tile) {
+#ifndef FLUTTER_SCENE_SKIP_SHADOWS
+  vec3 d = normalize(direction);
+  vec3 right = normalize(vec3(d.z, 0.0, -d.x));
+  vec3 up = cross(d, right);
+  float radius = frag_info.shadow_region.w;
+  vec3 q = (p + n * 0.006 - frag_info.shadow_region.xyz) / radius;
+  vec2 uv = vec2(dot(q, right), dot(q, up)) * 0.5 + 0.5;
+  float receiver = (dot(q, d) + 12.0) / 14.0;
+  if (any(lessThan(uv, vec2(0.002))) || any(greaterThan(uv, vec2(0.998)))) return 1.0;
+  // Compare both depths at the sampled texel center. Comparing the fragment's
+  // depth with a neighboring texel's depth makes a sloped plane occlude itself
+  // in repeating triangular bands, especially in a low-resolution atlas.
+  float ndotd = dot(n, d);
+  if (ndotd >= -0.001) return 1.0;
+  vec2 sample_uv = (floor(uv / frag_info.shadow_texel_size) + vec2(0.5)) *
+                   frag_info.shadow_texel_size;
+  vec2 delta_uv = sample_uv - uv;
+  vec3 plane_offset = 2.0 * (right * delta_uv.x + up * delta_uv.y);
+  receiver -= dot(n, plane_offset) / (14.0 * ndotd);
+  vec2 atlas_uv = vec2((tile + sample_uv.x) / frag_info.shadow_art.y,
+                       1.0 - sample_uv.y);
+  float blocker = texture(shadow_map, atlas_uv).r;
+  float gap = (receiver - blocker) * radius * 14.0;
+  return gap > 0.008 ? smoothstep(0.02, 0.45, gap) : 1.0;
+#else
+  return 1.0;
+#endif
+}
+
+#define _CONTACT_TAP(X,Y,Z,I) { vec3 d = normalize(vec3(X,Y,Z)); float w = max(0.0, dot(n, -d)); sum += w * BakedContactTap(p,n,d,start+I); weight += w; }
+float BakedContactVisibility(vec3 p, vec3 n) {
+  if (frag_info.shadow_art.z <= 0.0 || frag_info.shadow_art.y < 9.0 || frag_info.shadow_region.w <= 0.0) return 1.0;
+  float sum = 0.0, weight = 0.0, start = frag_info.shadow_art.y - 8.0;
+  _CONTACT_TAP(-1.0,-1.0,-1.0,0.0)
+  _CONTACT_TAP(-1.0,-1.0, 1.0,1.0)
+  _CONTACT_TAP(-1.0, 1.0,-1.0,2.0)
+  _CONTACT_TAP(-1.0, 1.0, 1.0,3.0)
+  _CONTACT_TAP( 1.0,-1.0,-1.0,4.0)
+  _CONTACT_TAP( 1.0,-1.0, 1.0,5.0)
+  _CONTACT_TAP( 1.0, 1.0,-1.0,6.0)
+  _CONTACT_TAP( 1.0, 1.0, 1.0,7.0)
+  return mix(1.0, sum / max(weight, 0.001), frag_info.shadow_art.z);
+}
+#undef _CONTACT_TAP

@@ -1,3 +1,4 @@
+import 'package:flutter_scene/src/render/directional_shadow_field.dart';
 import 'dart:async' show Completer, Timer;
 import 'dart:developer';
 import 'dart:math' as math;
@@ -2195,6 +2196,8 @@ base class Scene implements SceneGraph {
     final srcRect = ui.Rect.fromLTWH(0, 0, pixelSize.width, pixelSize.height);
     final paint = ui.Paint()
       ..filterQuality = view.filterQuality ?? filterQuality;
+    // Do not dispose here: CanvasKit uploads the web ImageBitmap lazily when
+    // rasterizing this recorded draw. Early disposal closes its pixel source.
     canvas.drawImageRect(image, srcRect, drawArea, paint);
   }
 
@@ -2247,9 +2250,13 @@ base class Scene implements SceneGraph {
 
     final light = lightComponent?.light;
     final lightDirection = lightComponent?.worldDirection;
+    final fixedField = spotShadowFrame == null && light?.castsShadow == true
+        ? light?.bakedShadowField
+        : null;
     // Cascaded shadows fit the camera frustum, so they require a
     // perspective projection; other projections render without shadows.
     final cascades =
+        fixedField?.cascades ??
         sharedShadowFrame?.cascades ??
         (light != null &&
                 light.castsShadow &&
@@ -2354,7 +2361,9 @@ base class Scene implements SceneGraph {
     ShadowCachePlan? shadowCachePlan;
     var effectiveCascades = cascades;
     final sharedCascades = sharedShadowFrame?.effectiveCascades;
-    if (sharedCascades != null) {
+    if (fixedField != null) {
+      effectiveCascades = fixedField.cascades;
+    } else if (sharedCascades != null) {
       effectiveCascades = sharedCascades;
     } else if (cascades.isNotEmpty &&
         hasStaticShadowCasters &&
@@ -2381,7 +2390,9 @@ base class Scene implements SceneGraph {
     // Directional cascades and shadow-casting spots share one atlas (and so one
     // sampler in the lit shader). All tiles use one resolution, the directional
     // light's when it casts, otherwise the spots'.
-    if (cascades.isNotEmpty || spotShadowFrame != null) {
+    if (fixedField != null) {
+      graph.addPass(DirectionalShadowFieldPass(fixedField));
+    } else if (cascades.isNotEmpty || spotShadowFrame != null) {
       graph.addPass(
         ShadowPass(
           renderScene: renderScene,
@@ -2743,6 +2754,7 @@ base class Scene implements SceneGraph {
         time: DateTime.now().millisecondsSinceEpoch.remainder(100000) / 1000.0,
         cullingPlanes: view.cullingPlanes,
         includeOffscreen: _warmUpIncludeOffscreen,
+        drawRenderOnTop: !captureLinearColor,
         cameraTransform: currentJitteredViewProjection,
       ),
     );

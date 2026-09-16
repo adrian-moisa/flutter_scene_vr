@@ -409,6 +409,16 @@ base class RenderPass {
       }
       instanceRate = layout.buffers[slot].stepMode == VertexStepMode.instance;
     }
+    // Buffer bindings are slot state, not a history of calls. The encoder
+    // deliberately retains bindings between same-pipeline draws; appending
+    // every replacement makes VAO keys and binding work grow with all prior
+    // draws in the pass. Keep only the latest geometry/instance view per slot.
+    for (var index = 0; index < _pendingVertexBindings.length; index++) {
+      if (_pendingVertexBindings[index].$2 == slot) {
+        _pendingVertexBindings[index] = (bufferView, slot, instanceRate);
+        return;
+      }
+    }
     // Deferred: applied (through the VAO cache) when the draw is issued.
     _pendingVertexBindings.add((bufferView, slot, instanceRate));
   }

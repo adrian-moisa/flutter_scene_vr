@@ -136,7 +136,9 @@ class ShadowCatcherBakePass extends RenderGraphPass {
     final scaleX = Vector3(world[0], world[1], world[2]).length;
     final scaleZ = Vector3(world[8], world[9], world[10]).length;
     final footprintWorld = math.max(sizeX * scaleX, sizeZ * scaleZ);
-    final resolution = bakeResolution(footprintWorld, material.softness);
+    final resolution =
+        material.cacheResolution?.clamp(_minResolution, _maxResolution) ??
+        bakeResolution(footprintWorld, material.softness);
 
     // Maps local space to clip space: local XZ spans NDC, local Y is flat.
     // gl_Position = bakeTransform * world, so fold the inverse model in.
@@ -260,8 +262,13 @@ class ShadowCatcherBakePass extends RenderGraphPass {
       resolution,
       format: gpu.PixelFormat.r8g8b8a8UNormInt,
     );
-    _encodeBlur(context, footprint, intermediate, Vector2(1.0, 0.0));
-    _encodeBlur(context, intermediate, cache, Vector2(0.0, 1.0));
+    final step = material.cacheResolution == null
+        ? 1.0
+        : material.softness *
+              resolution /
+              math.max(footprintWorld * _blurRadiusTexels, 1e-6);
+    _encodeBlur(context, footprint, intermediate, Vector2(step, 0.0));
+    _encodeBlur(context, intermediate, cache, Vector2(0.0, step));
 
     material.completeBake(
       cache,

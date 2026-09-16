@@ -144,6 +144,32 @@ class Texture2D implements TextureSource {
   @override
   gpu.SamplerOptions get sampledSampler => _sampler;
 
+  // Replaces one tightly packed RGBA8888 rectangle in this texture.
+  // This is deliberately restricted to textures without mip levels because
+  // changing only the base level would leave old generated mips visible when
+  // the material is minified. Interactive paint must disable mipmaps.
+  void overwriteRegion(
+    Uint8List pixels, {
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+  }) {
+    if (_texture.mipLevelCount != 1) {
+      throw StateError(
+        'Partial texture updates require mipmaps to be disabled.',
+      );
+    }
+    gpu.overwriteTextureRegion(
+      _texture,
+      ByteData.sublistView(pixels),
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+    );
+  }
+
   /// Builds a texture from RGBA8888 [pixels] (straight alpha, row-major) of
   /// [width] x [height].
   static Texture2D fromPixels(

@@ -420,8 +420,10 @@ base class SceneEncoder {
     this._cullingPlanes,
     this._cullInstances, {
     Matrix4? cameraTransform,
+    bool renderOnTop = false,
   }) : _renderPass = renderPass,
-       _transientsBuffer = transientsBuffer {
+       _transientsBuffer = transientsBuffer,
+       _renderOnTop = renderOnTop {
     currentSceneEncoderViewport = _dimensions;
     _cameraTransform = cameraTransform ?? _camera.getViewTransform(_dimensions);
     _cameraWindingFlipped = _cameraTransform.determinant() < 0;
@@ -443,6 +445,7 @@ base class SceneEncoder {
   final int _layerMask;
   final List<Plane> _cullingPlanes;
   final bool _cullInstances;
+  final bool _renderOnTop;
   // Not final because opaque and translucent draws can use separate passes.
   gpu.RenderPass _renderPass;
   final TransientWriter _transientsBuffer;
@@ -491,6 +494,7 @@ base class SceneEncoder {
   /// instance so each can be depth-sorted independently.
   void submit(RenderItem item) {
     if (!item.visible || !item.primitiveVisible) return;
+    if (item.renderOnTop != _renderOnTop) return;
     if ((item.layers & _layerMask) == 0) return;
     if (_cullInstances) {
       if (!item.cullVisibleInstances(frustum, _cullingPlanes)) return;
@@ -1326,7 +1330,15 @@ base class SceneEncoder {
   void _prepareTranslucent() {
     if (_translucentPrepared) return;
     final sortWatch = profileRendering ? (Stopwatch()..start()) : null;
-    _translucentRecords.sort((a, b) => b.depth.compareTo(a.depth));
+    _translucentRecords.sort((a, b) {
+      final aOrder = a.material.translucentOrder;
+      final bOrder = b.material.translucentOrder;
+      if (aOrder == null && bOrder == null) return b.depth.compareTo(a.depth);
+      if (aOrder == null) return -1;
+      if (bOrder == null) return 1;
+      final order = aOrder.compareTo(bOrder);
+      return order != 0 ? order : b.depth.compareTo(a.depth);
+    });
     sortWatch?.stop();
     _translucentSortMicros = sortWatch?.elapsedMicroseconds ?? 0;
     _translucentPrepared = true;
@@ -1445,19 +1457,20 @@ base class SceneEncoder {
     final encodeWatch = profileRendering ? (Stopwatch()..start()) : null;
     _renderPass.setDepthWriteEnable(false);
     _renderPass.setColorBlendEnable(true);
-    _renderPass.setColorBlendEquation(
-      gpu.ColorBlendEquation(
-        colorBlendOperation: gpu.BlendOperation.add,
-        sourceColorBlendFactor: gpu.BlendFactor.one,
-        destinationColorBlendFactor: gpu.BlendFactor.oneMinusSourceAlpha,
-        alphaBlendOperation: gpu.BlendOperation.add,
-        sourceAlphaBlendFactor: gpu.BlendFactor.one,
-        destinationAlphaBlendFactor: gpu.BlendFactor.oneMinusSourceAlpha,
-      ),
+    final defaultBlend = gpu.ColorBlendEquation(
+      colorBlendOperation: gpu.BlendOperation.add,
+      sourceColorBlendFactor: gpu.BlendFactor.one,
+      destinationColorBlendFactor: gpu.BlendFactor.oneMinusSourceAlpha,
+      alphaBlendOperation: gpu.BlendOperation.add,
+      sourceAlphaBlendFactor: gpu.BlendFactor.one,
+      destinationAlphaBlendFactor: gpu.BlendFactor.oneMinusSourceAlpha,
     );
 
     while (_translucentCursor < end) {
       final record = _translucentRecords[_translucentCursor++];
+      _renderPass.setColorBlendEquation(
+        record.material.colorBlendEquation ?? defaultBlend,
+      );
       _renderPass.setDepthWriteEnable(record.material.translucentDepthWrite);
       record.material.lightListOffset = record.lightListOffset;
       record.material.lightListCount = record.lightListCount;

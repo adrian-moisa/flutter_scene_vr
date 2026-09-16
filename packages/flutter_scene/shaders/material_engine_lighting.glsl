@@ -165,6 +165,11 @@ uniform FragInfo {
   // out), .y its world-space bias, .z the distance normalization the stored
   // moments were divided by, and .w the boundary fade width in cells.
   vec4 gi_visibility;
+  // x: underside strength, y: total regional atlas tiles (1 ordinary),
+  // z: contact strength, w: sun shadow opacity. No additional sampler.
+  vec4 shadow_art;
+  // Camera-independent contact field center and sphere radius.
+  vec4 shadow_region;
 }
 frag_info;
 
