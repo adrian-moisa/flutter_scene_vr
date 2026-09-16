@@ -107,6 +107,7 @@ class ScenePass extends RenderGraphPass {
     List<Plane> cullingPlanes = const [],
     bool includeOffscreen = false,
     bool suppressPlanarReflections = false,
+    bool drawRenderOnTop = false,
     Matrix4? cameraTransform,
     Matrix4? displayReferredCameraTransform,
     DebugViewFrame? debugView,
@@ -146,7 +147,8 @@ class ScenePass extends RenderGraphPass {
        _irradianceField = irradianceField,
        _fog = fog,
        _cullingPlanes = cullingPlanes,
-       _includeOffscreen = includeOffscreen;
+       _includeOffscreen = includeOffscreen,
+       _drawRenderOnTop = drawRenderOnTop;
 
   final Camera _camera;
   final Matrix4? _cameraTransform;
@@ -201,6 +203,7 @@ class ScenePass extends RenderGraphPass {
   final double _time;
   final List<Plane> _cullingPlanes;
   final bool _includeOffscreen;
+  final bool _drawRenderOnTop;
 
   static const gpu.PixelFormat _hdrFormat = gpu.PixelFormat.r16g16b16a16Float;
 
@@ -475,6 +478,9 @@ class ScenePass extends RenderGraphPass {
       }
       rendererSubmissions.submit(commandBuffer);
       _encodeDisplayReferredLayer(context, encoder, depth, width, height);
+      if (_drawRenderOnTop) {
+        _renderOnTop(context, hdrColor, lighting);
+      }
       context.blackboard.set(kSceneColorBlackboardKey, hdrColor);
       return;
     }
@@ -597,6 +603,9 @@ class ScenePass extends RenderGraphPass {
     }
 
     _encodeDisplayReferredLayer(context, encoder, depth, width, height);
+    if (_drawRenderOnTop) {
+      _renderOnTop(context, currentColor, lighting);
+    }
     context.blackboard.set(kSceneColorBlackboardKey, currentColor);
     flushWatch?.stop();
     if (profileRendering) {
@@ -842,6 +851,65 @@ class ScenePass extends RenderGraphPass {
       encode(frame.splitOverlays);
     }
     pass.setScissor(gpu.Scissor(width: width, height: height));
+  }
+
+  void _renderOnTop(
+    RenderGraphContext context,
+    gpu.Texture sceneColor,
+    Lighting lighting,
+  ) {
+    final hasVisibleOverlay = _renderScene.items.any(
+      (item) =>
+          item.drawsColor &&
+          item.renderOnTop &&
+          (item.layers & _layerMask) != 0,
+    );
+    if (!hasVisibleOverlay) return;
+
+    final depth = context.texturePool.acquire(
+      TransientTextureDescriptor.depth(
+        width: _dimensions.width.toInt(),
+        height: _dimensions.height.toInt(),
+        format: depthRasterOf(_camera).depthStencilFormat,
+        debugName: 'scene_overlay_depth',
+      ),
+    );
+    final target = gpu.RenderTarget.singleColor(
+      gpu.ColorAttachment(texture: sceneColor, loadAction: gpu.LoadAction.load),
+      depthStencilAttachment: gpu.DepthStencilAttachment(
+        texture: depth,
+        depthClearValue: depthRasterOf(_camera).clearDepth,
+      ),
+    );
+    final commandBuffer = gpu.gpuContext.createCommandBuffer();
+    final renderPass = commandBuffer.createRenderPass(target);
+    final encoder = SceneEncoder(
+      renderPass,
+      context.transientsBuffer,
+      _camera,
+      _dimensions,
+      lighting,
+      _layerMask,
+      _cullingPlanes,
+      !_includeOffscreen,
+      cameraTransform: _cameraTransform,
+      renderOnTop: true,
+      debugView: _debugView,
+      primaryView: _primaryView,
+    );
+    if (_includeOffscreen) {
+      for (final item in _renderScene.items) {
+        encoder.submit(item);
+      }
+    } else {
+      _renderScene.cull(
+        encoder.frustum,
+        encoder.submit,
+        additionalPlanes: _cullingPlanes,
+      );
+    }
+    encoder.flush();
+    rendererSubmissions.submit(commandBuffer);
   }
 
   static void _recordProfile(int cullMicros, int flushMicros) {

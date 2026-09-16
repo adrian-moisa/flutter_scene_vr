@@ -739,13 +739,15 @@ base class SceneEncoder {
     this._cullingPlanes,
     this._cullInstances, {
     Matrix4? cameraTransform,
+    bool renderOnTop = false,
     Matrix4? displayReferredCameraTransform,
     DebugViewFrame? debugView,
     bool primaryView = true,
   }) : _renderPass = renderPass,
        _transientsBuffer = transientsBuffer,
        _debugView = debugView,
-       _primaryView = primaryView {
+       _primaryView = primaryView,
+       _renderOnTop = renderOnTop {
     currentSceneEncoderViewport = _dimensions;
     // Read once. A camera's getters may allocate, and both feed every draw.
     _cameraPosition = _camera.position;
@@ -844,6 +846,7 @@ base class SceneEncoder {
   bool _coveragePass = false;
   final List<Plane> _cullingPlanes;
   final bool _cullInstances;
+  final bool _renderOnTop;
   // Not final because opaque and translucent draws can use separate passes.
   gpu.RenderPass _renderPass;
   final TransientWriter _transientsBuffer;
@@ -921,7 +924,7 @@ base class SceneEncoder {
   /// instance so each can be depth-sorted independently.
   void submit(RenderItem item) {
     activeRenderCounters.submitted++;
-    if (!item.drawsColor) return;
+    if (!item.drawsColor || item.renderOnTop != _renderOnTop) return;
     if ((item.layers & _layerMask) == 0) {
       activeRenderCounters.layerMasked++;
       activeDrawRecorder?.onSkip(item, DrawSkipReason.layerMasked);
@@ -2461,7 +2464,16 @@ base class SceneEncoder {
   // Render order first, then farthest first.
   static int _backToFront(_TranslucentRecord a, _TranslucentRecord b) {
     final byOrder = a.item.renderOrder.compareTo(b.item.renderOrder);
-    return byOrder != 0 ? byOrder : b.depth.compareTo(a.depth);
+    if (byOrder != 0) return byOrder;
+    final aOrder = a.material.translucentOrder;
+    final bOrder = b.material.translucentOrder;
+    if (aOrder == null && bOrder == null) return b.depth.compareTo(a.depth);
+    if (aOrder == null) return -1;
+    if (bOrder == null) return 1;
+    final byMaterialOrder = aOrder.compareTo(bOrder);
+    return byMaterialOrder != 0
+        ? byMaterialOrder
+        : b.depth.compareTo(a.depth);
   }
 
   void _prepareTranslucent() {
@@ -2648,19 +2660,20 @@ base class SceneEncoder {
     final encodeWatch = profileRendering ? (Stopwatch()..start()) : null;
     _renderPass.setDepthWriteEnable(false);
     _renderPass.setColorBlendEnable(true);
-    _renderPass.setColorBlendEquation(
-      gpu.ColorBlendEquation(
-        colorBlendOperation: gpu.BlendOperation.add,
-        sourceColorBlendFactor: gpu.BlendFactor.one,
-        destinationColorBlendFactor: gpu.BlendFactor.oneMinusSourceAlpha,
-        alphaBlendOperation: gpu.BlendOperation.add,
-        sourceAlphaBlendFactor: gpu.BlendFactor.one,
-        destinationAlphaBlendFactor: gpu.BlendFactor.oneMinusSourceAlpha,
-      ),
+    final defaultBlend = gpu.ColorBlendEquation(
+      colorBlendOperation: gpu.BlendOperation.add,
+      sourceColorBlendFactor: gpu.BlendFactor.one,
+      destinationColorBlendFactor: gpu.BlendFactor.oneMinusSourceAlpha,
+      alphaBlendOperation: gpu.BlendOperation.add,
+      sourceAlphaBlendFactor: gpu.BlendFactor.one,
+      destinationAlphaBlendFactor: gpu.BlendFactor.oneMinusSourceAlpha,
     );
 
     while (_translucentCursor < end) {
       final record = _translucentRecords[_translucentCursor++];
+      _renderPass.setColorBlendEquation(
+        record.material.colorBlendEquation ?? defaultBlend,
+      );
       _renderPass.setDepthWriteEnable(record.material.translucentDepthWrite);
       // Set per record, like the depth write above, so a projection volume
       // drawn with `always` cannot leak that test into the next draw.

@@ -29,9 +29,10 @@ void main() {
   vec4 base = texture(scene_color, v_uv);
   vec4 center = texture(selection_mask, v_uv);
 
-  // Constant kernel bounds (GLSL ES 1.00 requires it); samples outside the
-  // configured thickness are skipped.
-  const int kRadius = 4;
+  // Constant kernel bounds (GLSL ES 1.00 requires it); six texels lets a
+  // three-pixel editor outline double cleanly on high-density displays.
+  // Samples outside the configured thickness are skipped.
+  const int kRadius = 6;
   float t = clamp(outline_info.thickness, 1.0, float(kRadius));
   float t2 = t * t;
   float bestCoverage = 0.0;

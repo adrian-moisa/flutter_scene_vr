@@ -128,6 +128,23 @@ final class _WebGpuBackend extends WebBackend {
       );
 
   @override
+  void overwriteTextureRegion(
+    Texture texture,
+    ByteData sourceBytes, {
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+  }) => _overwriteTextureRegion(
+    texture as _WebGpuTexture,
+    sourceBytes,
+    x: x,
+    y: y,
+    width: width,
+    height: height,
+  );
+
+  @override
   Future<ShaderLibrary?> loadShaderLibraryAsync(String assetName) async =>
       _loadShaderLibraryAsync(await _ready(), assetName);
 

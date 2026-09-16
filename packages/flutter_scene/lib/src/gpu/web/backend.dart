@@ -24,6 +24,15 @@ abstract base class WebBackend {
 
   Texture textureFromImage(GpuContext gpuContext, ui.Image image);
 
+  void overwriteTextureRegion(
+    Texture texture,
+    ByteData sourceBytes, {
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+  });
+
   Future<ShaderLibrary?> loadShaderLibraryAsync(String assetName);
   Future<ShaderLibrary?> loadShaderLibraryFromBytesAsync(ByteData bytes);
   Future<void> reinitializeShaderLibraryAsync(String assetKey);
@@ -369,3 +378,49 @@ bool writeGeometryData(
   source,
   destinationOffsetInBytes: destinationOffsetInBytes,
 );
+
+// Uploads only the changed pixels, preserving the native region-copy API.
+void overwriteTextureRegion(
+  Texture texture,
+  ByteData sourceBytes, {
+  required int x,
+  required int y,
+  required int width,
+  required int height,
+}) {
+  if (texture.sampleCount != 1) {
+    throw Exception('Cannot overwrite a multisample texture region');
+  }
+  if (texture.mipLevelCount != 1) {
+    throw Exception(
+      'Texture region uploads require a texture without mip levels',
+    );
+  }
+  if (texture.format != PixelFormat.r8g8b8a8UNormInt &&
+      texture.format != PixelFormat.r8g8b8a8UNormIntSRGB) {
+    throw Exception('Texture region uploads currently require RGBA8 pixels');
+  }
+  if (x < 0 ||
+      y < 0 ||
+      width < 1 ||
+      height < 1 ||
+      x + width > texture.width ||
+      y + height > texture.height) {
+    throw Exception('Texture region is outside the destination texture');
+  }
+  final expectedSize = width * height * texture.bytesPerTexel;
+  if (sourceBytes.lengthInBytes != expectedSize) {
+    throw Exception(
+      'sourceBytes length (${sourceBytes.lengthInBytes}) must equal region size ($expectedSize)',
+    );
+  }
+
+  _backend.overwriteTextureRegion(
+    texture,
+    sourceBytes,
+    x: x,
+    y: y,
+    width: width,
+    height: height,
+  );
+}

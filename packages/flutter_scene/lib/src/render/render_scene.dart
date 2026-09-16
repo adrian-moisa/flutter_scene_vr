@@ -103,6 +103,9 @@ class RenderItem {
 
   /// The owning node's [Node.renderOrder], the first sort key of its pass.
   double renderOrder = 0.0;
+  /// Whether this item draws in the separate, fresh-depth overlay pass rather
+  /// than the ordinary world pass. Refreshed from `Node.renderOnTop`.
+  bool renderOnTop = false;
 
   /// The owning node's light channels (an 8-bit bitmask), refreshed each
   /// frame. A light shades this item only when its own channel mask
@@ -1087,7 +1090,7 @@ class RenderScene {
   }) {
     final inputs = <RenderInput>{};
     void collect(RenderItem item) {
-      if (!item.drawsColor || (item.layers & layerMask) == 0) {
+      if (!item.drawsColor || item.renderOnTop || (item.layers & layerMask) == 0) {
         return;
       }
       inputs.addAll(item.material.sceneInputs);
@@ -1127,6 +1130,7 @@ class RenderScene {
   Set<RenderInput> collectAllMaterialInputs() {
     final inputs = <RenderInput>{};
     for (final item in items) {
+      if (item.renderOnTop) continue;
       inputs.addAll(item.material.sceneInputs);
       final lod = item.lod;
       if (lod != null) {

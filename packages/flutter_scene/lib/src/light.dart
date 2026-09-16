@@ -1,3 +1,4 @@
+import 'package:flutter_scene/src/render/directional_shadow_field.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -115,6 +116,12 @@ enum DirectionalShadowFilter {
 /// render with a perspective projection.
 /// {@category Lighting and environment}
 class DirectionalLight {
+  /// Optional retained field for static editors and orthographic receivers.
+  DirectionalShadowField? bakedShadowField;
+
+  /// Keeps cast visibility subtle without reducing the sun's illumination.
+  double shadowOpacity = 1;
+
   /// Default world-space travel direction for scene-level lights.
   static Vector3 get defaultDirection => Vector3(-0.3, -1.0, -0.2);
 
@@ -480,8 +487,14 @@ class DirectionalLight {
   Matrix4 cascadeLightSpaceMatrix(
     Vector3 lightDir,
     Vector3 center,
-    double radius,
-  ) => _cascadeLightSpaceMatrix(lightDir, center, radius);
+    double radius, {
+    bool snapToTexels = true,
+  }) => _cascadeLightSpaceMatrix(
+    lightDir,
+    center,
+    radius,
+    snapToTexels: snapToTexels,
+  );
 
   // The world -> light-clip matrix for a cascade whose frustum slice is
   // bounded by a sphere ([sphereCenter], [sphereRadius]). The orthographic box
@@ -491,8 +504,9 @@ class DirectionalLight {
   Matrix4 _cascadeLightSpaceMatrix(
     Vector3 lightDir,
     Vector3 sphereCenter,
-    double sphereRadius,
-  ) {
+    double sphereRadius, {
+    bool snapToTexels = true,
+  }) {
     final fx = lightDir.x;
     final fy = lightDir.y;
     final fz = lightDir.z;
@@ -530,8 +544,10 @@ class DirectionalLight {
     final texelY = (ty * 0.5 + 0.5) * resolution;
     final offsetX = (texelX.roundToDouble() - texelX) / resolution * 2.0;
     final offsetY = (texelY.roundToDouble() - texelY) / resolution * 2.0;
-    tx += offsetX;
-    ty += offsetY;
+    if (snapToTexels) {
+      tx += offsetX;
+      ty += offsetY;
+    }
     return Matrix4(
       rx * inverseRadius,
       ux * inverseRadius,

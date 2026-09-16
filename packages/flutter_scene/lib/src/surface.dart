@@ -111,6 +111,9 @@ class Surface {
     for (final view in _views) {
       bytes += view.residentBytes;
     }
+    for (final view in _externalViews) {
+      bytes += view.pool.residentBytes;
+    }
     return bytes;
   }
 
@@ -135,6 +138,10 @@ class Surface {
     var bytes = 0;
     for (final view in _views) {
       bytes += view.shed();
+    }
+    for (final view in _externalViews) {
+      bytes += view.pool.residentBytes;
+      view.pool.clear();
     }
     return bytes;
   }
@@ -174,7 +181,8 @@ class Surface {
   /// The number of textures every view's rings and transient pools hold.
   @visibleForTesting
   int get debugHeldTextureCount =>
-      _views.fold(0, (count, view) => count + view.heldTextureCount);
+      _views.fold(0, (count, view) => count + view.heldTextureCount) +
+      _externalViews.fold(0, (count, view) => count + view.pool.heldTextureCount);
 
   /// Releases every view's rings and transient pools. A later frame
   /// allocates them again.
@@ -184,6 +192,10 @@ class Surface {
       view.dispose();
     }
     _views.clear();
+    for (final view in _externalViews) {
+      view.pool.clear();
+    }
+    _externalViews.clear();
   }
 }
 

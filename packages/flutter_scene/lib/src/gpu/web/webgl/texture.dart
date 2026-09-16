@@ -389,3 +389,30 @@ final class WebGlTexture extends Texture {
     return _gpuContext.snapshotTextureSync(this);
   }
 }
+
+// The facade validates this tightly packed RGBA8 region before dispatch.
+void _overwriteTextureRegion(
+  WebGlTexture texture,
+  ByteData sourceBytes, {
+  required int x,
+  required int y,
+  required int width,
+  required int height,
+}) {
+  final gl = texture._gpuContext._gl;
+  texture._gpuContext._bindTextureForSetup(texture.glTarget, texture._texture);
+  final view = sourceBytes.buffer
+      .asUint8List(sourceBytes.offsetInBytes, sourceBytes.lengthInBytes)
+      .toJS;
+  gl.texSubImage2D(
+    texture.glSliceTarget(0),
+    0,
+    x,
+    y,
+    width.toJS,
+    height.toJS,
+    texture._glFormat.format.toJS,
+    texture._glFormat.type,
+    view,
+  );
+}

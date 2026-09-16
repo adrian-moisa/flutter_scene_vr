@@ -18,6 +18,23 @@ final class _WebGlBackend extends WebBackend {
       WebGlTexture.fromImage();
 
   @override
+  void overwriteTextureRegion(
+    Texture texture,
+    ByteData sourceBytes, {
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+  }) => _overwriteTextureRegion(
+    texture.webGl,
+    sourceBytes,
+    x: x,
+    y: y,
+    width: width,
+    height: height,
+  );
+
+  @override
   Future<ShaderLibrary?> loadShaderLibraryAsync(String assetName) =>
       _loadShaderLibraryAsync(assetName);
 

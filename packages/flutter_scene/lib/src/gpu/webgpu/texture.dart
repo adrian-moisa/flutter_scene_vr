@@ -195,3 +195,28 @@ final class _WebGpuTexture extends Texture {
   @override
   ui.Image asImage() => _textureToImageSync(this);
 }
+
+// The facade validates this tightly packed RGBA8 region before dispatch.
+void _overwriteTextureRegion(
+  _WebGpuTexture texture,
+  ByteData sourceBytes, {
+  required int x,
+  required int y,
+  required int width,
+  required int height,
+}) {
+  texture._context.device.device.queue.writeTexture(
+    _obj({
+      'texture': texture.texture,
+      'mipLevel': 0,
+      'origin': [x, y, 0],
+    }),
+    _WebGpuDeviceBuffer._jsViewOf(sourceBytes),
+    _obj({
+      'offset': 0,
+      'bytesPerRow': width * texture.bytesPerTexel,
+      'rowsPerImage': height,
+    }),
+    _arr([width, height, 1]),
+  );
+}

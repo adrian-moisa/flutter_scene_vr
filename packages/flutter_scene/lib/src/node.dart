@@ -148,6 +148,16 @@ base class Node implements SceneGraph {
   // TODO(render-order-fscene): carry it in the .fscene document so authored
   // scenes and the editor can set it.
   double renderOrder = 0.0;
+  /// Draws this node's meshes in a separate scene pass after ordinary world
+  /// geometry, using a freshly cleared depth buffer.
+  ///
+  /// This is intended for renderer-owned editor helpers such as bones and
+  /// joint handles that must remain visible through the object they edit.
+  /// Overlay meshes still depth-test against one another, but never against
+  /// the main scene. The value is not inherited by children; set it on every
+  /// mesh-bearing helper node. Defaults to `false`.
+  /// {@category Rendering}
+  bool renderOnTop = false;
 
   // TODO(fscene): serialize this mask (NodeSpec field + json + diff).
   /// The light channels this node's meshes occupy, an 8-bit bitmask. A light
@@ -1520,6 +1530,7 @@ base class Node implements SceneGraph {
     );
     result.isJoint = isJoint;
     result.isImportRoot = isImportRoot;
+    result.renderOnTop = renderOnTop;
     result._localTransformTrs = _localTransformTrs?.clone();
     result._morphWeights = _morphWeights == null
         ? null
@@ -1673,6 +1684,46 @@ base class Node implements SceneGraph {
       index: index,
       justVisited: visited,
     );
+  }
+
+  /// Refreshes this subtree's render items without ticking components or
+  /// animation players.
+  ///
+  /// This is useful for renderer-owned presentation helpers that are derived
+  /// after the scene's normal update pass. Their materials and transforms can
+  /// reach the current frame without advancing animation a second time.
+  void refreshRenderItems() {
+    var ancestorsVisible = true;
+    for (var ancestor = parent; ancestor != null; ancestor = ancestor.parent) {
+      ancestorsVisible = ancestorsVisible && ancestor.visible;
+    }
+    _refreshRenderItemsPass(ancestorsVisible);
+  }
+
+  void _refreshRenderItemsPass(bool ancestorsVisible) {
+    _effectiveVisible = ancestorsVisible && visible;
+    for (final meshComponent in _meshComponents) {
+      // Helpers swap primitive materials after the scene's animation sample.
+      meshComponent.refreshMaterials();
+    }
+    if (_effectiveVisible) {
+      for (final meshComponent in _meshComponents) {
+        meshComponent.refreshRenderItems();
+      }
+      for (final instancedMeshComponent in _instancedMeshComponents) {
+        instancedMeshComponent.refreshRenderItem();
+      }
+    } else {
+      for (final meshComponent in _meshComponents) {
+        meshComponent.hideRenderItems();
+      }
+      for (final instancedMeshComponent in _instancedMeshComponents) {
+        instancedMeshComponent.hideRenderItem();
+      }
+    }
+    for (final child in children) {
+      child._refreshRenderItemsPass(_effectiveVisible);
+    }
   }
 
   /// Walks this node's subtree once per physics substep and dispatches

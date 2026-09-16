@@ -7,7 +7,7 @@ uniform FrameInfo {
   mat4 camera_transform; // view-projection
   mat4 model_transform;  // node world transform
   vec4 camera_position;  // world-space camera position (xyz)
-  // x: half width in world units. yzw: unused.
+  // x: half width in world units. y: world-space camera depth bias.
   vec4 params;
   // The material's depth-layer offset (xy), see ApplyDepthOffset.
   vec4 depth_offset;
@@ -55,6 +55,9 @@ void main() {
     perp = -perp;
   }
   pos += perp * (frame_info.params.x * corner.y);
+  pos = ApplyDepthBias(pos, frame_info.camera_transform,
+                       frame_info.camera_position.xyz, frame_info.params.y);
+  view = frame_info.camera_position.xyz - pos;
 
   // Camera-facing shading normal, perpendicular to both the segment and
   // the expansion direction.

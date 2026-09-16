@@ -18,7 +18,7 @@ import 'package:flutter_scene/src/render/uniform_slots.dart';
 /// Packs the engine lighting half of the shared `FragInfo` uniform block and
 /// binds the image-based-lighting and shadow samplers.
 ///
-/// The `FragInfo` block (declared in `shaders/material_engine_lighting.glsl`
+/// The `FragInfo` block (declared in `shaders/material_scene_inputs.glsl`
 /// and read by `EvaluateLighting` in `material_lighting.glsl`) mixes
 /// material-specific fields with engine lighting / IBL / shadow fields. This
 /// helper owns the lighting fields, which are identical for every lit material;
@@ -26,15 +26,16 @@ import 'package:flutter_scene/src/render/uniform_slots.dart';
 /// [PhysicallyBasedMaterial] and `PreprocessedMaterial` use it so the lighting
 /// packing lives in one place.
 class EngineLightingUniforms {
-  /// The float count of the full `FragInfo` block (832 bytes / 208 floats:
+  /// The float count of the full `FragInfo` block (864 bytes / 216 floats:
   /// the mat4 `environment_transform` ends at float 155, the `ssao_params`
   /// vec4 at floats 156..159, then the `radiance_blend` vec4 at floats
   /// 160..163, `ssao_lighting` at 164..167, `model_scale` at 168..171,
   /// `dielectric_f0` at 172..175, the five irradiance-field vec4s at
   /// 176..195, `froxel_grid` at 196..199, `view_projection` at 200..203, and
-  /// `camera_position` at 204..207). See the layout map in the
+  /// `camera_position` at 204..207, `shadow_art` at 208..211, and
+  /// `shadow_region` at 212..215). See the layout map in the
   /// implementation.
-  static const fragInfoFloatCount = 208;
+  static const fragInfoFloatCount = 216;
 
   /// Index of the `dielectric_f0` vec4 in `FragInfo`. [packInto] writes the
   /// standard 0.04 dielectric reflectance; a material with a non-default
@@ -75,7 +76,28 @@ class EngineLightingUniforms {
     double modelScaleX = 1.0,
     double modelScaleY = 1.0,
     double modelScaleZ = 1.0,
+    double undersideShadowStrength = 0,
+    double contactShadowStrength = 0,
   }) {
+    fragInfo[208] = undersideShadowStrength.clamp(0.0, 1.0);
+    final shadowField = lighting.directionalLight?.bakedShadowField;
+    final activeField =
+        shadowField != null &&
+        identical(lighting.shadowMap, shadowField.texture);
+    fragInfo[209] = activeField
+        ? shadowField.sunLayers + (shadowField.hasContact ? 8.0 : 0.0)
+        : 1;
+    fragInfo[210] = activeField && shadowField.hasContact
+        ? contactShadowStrength.clamp(0.0, 1.0)
+        : 0;
+    fragInfo[211] = lighting.directionalLight?.shadowOpacity ?? 1;
+    fragInfo.fillRange(212, 216, 0);
+    if (activeField) {
+      fragInfo[212] = shadowField.center.x;
+      fragInfo[213] = shadowField.center.y;
+      fragInfo[214] = shadowField.center.z;
+      fragInfo[215] = shadowField.radius;
+    }
     // Default to fully drawn; a material with an active LOD cross-fade
     // overwrites this. Without it the zero-initialized slot would discard
     // every fragment.

@@ -97,7 +97,8 @@ void main() {
   }
 
   vec4 skinned_position = skin_matrix * vec4(in_position, 1.0);
-  vec3 skinned_normal = mat3(skin_matrix) * in_normal;
+  vec3 skinned_normal = UnitOrZero(
+      WorldNormalMatrix(mat3(skin_matrix)) * in_normal);
   mat4 combined_transform = frame_info.model_transform * skin_matrix;
   vec4 model_position = combined_transform * vec4(in_position, 1.0);
 

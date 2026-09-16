@@ -40,7 +40,7 @@ platform presentation paths.
 
 The documented engine-build host is **macOS on Apple Silicon**, targeting an
 **ARM64 Meta Quest 3**. Start with the
-[Flutter VR setup guide](https://github.com/adrian-moisa/flutter_vr#flutter-vr-fork):
+[Flutter VR setup guide](https://github.com/adrian-moisa/flutter_vr/tree/vr#flutter-vr-fork):
 it covers SDK installation, `PATH`/IDE selection, engine dependencies, and the
 memory-conscious Android/host build. Keep stock Flutter installed separately.
 For a web-only first look, you can stop before compiling the native engine,
@@ -57,9 +57,22 @@ Use the same directory layout as that guide:
 ```sh
 export FLUTTER_VR_ROOT="$HOME/Projects/flutter_vr"
 export PATH="$FLUTTER_VR_ROOT/bin:$PATH"
-git clone https://github.com/adrian-moisa/flutter_scene_vr.git "$HOME/Projects/flutter_scene_vr"
+git clone --branch vr https://github.com/adrian-moisa/flutter_scene_vr.git "$HOME/Projects/flutter_scene_vr"
 cd "$HOME/Projects/flutter_scene_vr"
+git remote add upstream https://github.com/bdero/flutter_scene.git
 ```
+
+Both forks keep their maintained VR changes on `vr`. Commit and push fork work
+only to `origin/vr`; leave `master` untouched. Explicitly select `vr` when cloning
+either fork, even if GitHub opens a different default branch.
+Maintainers should select `vr` as each fork's default branch in GitHub repository
+settings so repository visitors see the maintained code too.
+
+For an existing clone, first commit or otherwise preserve any local work, then
+fetch `origin`. If local `vr` does not exist, create it with
+`git switch --create vr --track origin/vr`. If it exists, use `git switch vr`
+and `git branch --set-upstream-to=origin/vr vr`. Do not reclone or discard local
+changes. If `origin/vr` is missing, the maintainer must publish it first.
 
 Use the fork revisions containing the VR changes. A stock Flutter installation
 meeting the upstream README's version requirement does not include the external
@@ -214,7 +227,7 @@ Android processes.
 Not every gallery example or interaction has a native VR mapping. The current
 registry keeps Multiplayer, DICOM Volume, External Texture, and Split Screen
 flat-only; other examples can have interaction or device-service limitations.
-The [gallery report](https://github.com/adrian-moisa/flutter_scene_vr/blob/HEAD/examples/openxr_quest/GALLERY_VR_REPORT.md)
+The [gallery report](https://github.com/adrian-moisa/flutter_scene_vr/blob/vr/examples/openxr_quest/GALLERY_VR_REPORT.md)
 separates adapted examples from physically verified ones.
 
 ## 5. Show the demo on a laptop
@@ -262,7 +275,7 @@ hold resolution and all other settings fixed while changing one effect.
 Manual changes select **Custom**, saved per example for the current app session;
 restarts and flat/VR process transitions do not preserve it. Ultra is a quality
 comparison, not a recommended Quest performance baseline. See the
-[Quest gallery guide](https://github.com/adrian-moisa/flutter_scene_vr/blob/HEAD/examples/openxr_quest/README.md)
+[Quest gallery guide](https://github.com/adrian-moisa/flutter_scene_vr/blob/vr/examples/openxr_quest/README.md)
 for the current preset values.
 
 The performance panel reports frame rates, timing, and actual render/atlas
@@ -323,8 +336,38 @@ outputs after engine/dependency changes. Refresh Scene dependencies and rebuild
 the app so its hooks regenerate the appropriate assets. Do not publish local
 SDK paths or assume an arbitrary upstream rebase remains compatible.
 
+### Update or publish `vr`
+
+For developers consuming the published fork, run from this checkout:
+
+```sh
+git switch vr
+git pull --ff-only origin vr
+flutter pub get
+```
+
+Maintainers commit changes on `vr` and publish ordinary new commits with
+`git push -u origin vr`. To incorporate official changes, start from a clean
+working tree, fetch both remotes, review any remote-only commits, then rebase:
+
+```sh
+git switch vr
+git fetch origin
+git log --oneline --left-right vr...origin/vr
+git fetch upstream
+git rebase upstream/master
+```
+
+Use `upstream` for `https://github.com/bdero/flutter_scene.git`; add that remote
+if an older clone lacks it. Reconcile unexpected divergence before rebasing.
+After checking compatibility with the Flutter `vr` checkout, publish a rewritten
+history with `git push --force-with-lease origin vr`. Never push to `master`,
+`main`, or `upstream`. A failed lease requires reviewing the remote changes.
+Consumers whose fast-forward pull fails after a rebase or amend must reconcile
+with the published `vr` history; switching to `master` is not a fix.
+
 For implementation details, see the
-[direct-rendering design/history](https://github.com/adrian-moisa/flutter_scene_vr/blob/HEAD/examples/openxr_quest/DIRECT_SWAPCHAIN_RENDERING.md).
+[direct-rendering design/history](https://github.com/adrian-moisa/flutter_scene_vr/blob/vr/examples/openxr_quest/DIRECT_SWAPCHAIN_RENDERING.md).
 Its dated measurements and earlier defaults are historical; use this addendum,
 the current gallery guide, and the current helper for setup and launch.
 

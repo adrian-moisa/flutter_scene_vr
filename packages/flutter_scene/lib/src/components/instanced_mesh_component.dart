@@ -76,6 +76,7 @@ class InstancedMeshComponent extends Component {
         item.visible == visible &&
         item.frustumCulled == frustumCulled &&
         item.layers == node.layers &&
+        item.renderOnTop == node.renderOnTop &&
         item.shadowStatic == node.shadowStatic &&
         item.shadowCastingMode == node.shadowCastingMode &&
         item.lightChannelMask == lightChannelMask) {
@@ -85,6 +86,8 @@ class InstancedMeshComponent extends Component {
     item.frustumCulled = frustumCulled;
     item.layers = node.layers;
     item.renderOrder = node.renderOrder;
+    final renderOnTopChanged = item.renderOnTop != node.renderOnTop;
+    item.renderOnTop = node.renderOnTop;
     final worldTransform = node.globalTransform;
     final boundsChangedByInput =
         worldTransformVersion != _worldTransformVersion ||
@@ -95,6 +98,7 @@ class InstancedMeshComponent extends Component {
             item.shadowStatic != node.shadowStatic ||
             item.shadowCastingMode != node.shadowCastingMode ||
             item.lightChannelMask != lightChannelMask ||
+            renderOnTopChanged ||
             boundsChangedByInput) &&
         (item.shadowStatic || node.shadowStatic) &&
         (item.castsShadows || node.shadowCastingMode != ShadowCastingMode.off);

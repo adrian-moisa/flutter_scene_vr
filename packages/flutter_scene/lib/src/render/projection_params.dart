@@ -51,7 +51,9 @@ class ProjectionParams {
         // The oblique clip rewrites only the depth row, so the base projection
         // still describes the lateral mapping and the planar depth range.
         return ProjectionParams.of(projection.base, viewportSize);
-      case PerspectiveProjection():
+      // Subclasses such as OpenXR override the projection matrix with
+      // asymmetric lens offsets; read those through the matrix path below.
+      case PerspectiveProjection() when projection.runtimeType == PerspectiveProjection:
         final tanY = math.tan(projection.fovRadiansY * 0.5);
         final aspectRatio = viewportSize.height > 0
             ? viewportSize.width / viewportSize.height

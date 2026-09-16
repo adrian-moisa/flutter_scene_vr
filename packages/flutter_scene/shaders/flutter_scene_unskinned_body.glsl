@@ -52,6 +52,9 @@ void main() {
 #ifdef FLUTTER_SCENE_MORPH_TARGETS
   vec3 in_position = MorphedPosition(position);
   vec3 in_normal = MorphedNormal(normal);
+#elif defined(FLUTTER_SCENE_TERRAIN)
+  vec3 in_position = TerrainPosition(position);
+  vec3 in_normal = TerrainNormal(position, normal);
 #else
 #define in_position position
 #define in_normal normal

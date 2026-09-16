@@ -1,4 +1,5 @@
 import 'dart:async' show Completer, FutureExtensions, Timer;
+import 'package:flutter_scene/src/render/directional_shadow_field.dart';
 import 'dart:developer';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -3246,6 +3247,8 @@ base class Scene implements SceneGraph {
     final srcRect = ui.Rect.fromLTWH(0, 0, pixelSize.width, pixelSize.height);
     final paint = ui.Paint()
       ..filterQuality = view.filterQuality ?? filterQuality;
+    // Do not dispose here: CanvasKit uploads the web ImageBitmap lazily when
+    // rasterizing this recorded draw. Early disposal closes its pixel source.
     canvas.drawImageRect(image, srcRect, drawArea, paint);
   }
 
@@ -3566,6 +3569,10 @@ base class Scene implements SceneGraph {
 
     final light = lightComponent?.light;
     final lightDirection = lightComponent?.worldDirection;
+    final fixedField = spotShadowFrame == null &&
+            pointShadowFrame == null && light?.castsShadow == true
+        ? light?.bakedShadowField
+        : null;
     // Every depth-reconstructing effect reads the projection through these
     // terms, so perspective, orthographic, and custom projections all take
     // the same paths. A degenerate projection (zero extent) skips them.
@@ -3574,7 +3581,7 @@ base class Scene implements SceneGraph {
         projection.scaleX > 0.0 &&
         projection.scaleY > 0.0 &&
         projection.far > projection.near;
-    final cascades = sharedShadowFrame?.cascades ?? (light != null && light.castsShadow && projectionValid
+    final cascades = fixedField?.cascades ?? sharedShadowFrame?.cascades ?? (light != null && light.castsShadow && projectionValid
         ? light.computeCascades(
             camera,
             pixelSize.width / pixelSize.height,
@@ -3686,7 +3693,9 @@ base class Scene implements SceneGraph {
     ShadowCachePlan? shadowCachePlan;
     var effectiveCascades = cascades;
     final sharedCascades = sharedShadowFrame?.effectiveCascades;
-    if (sharedCascades != null) {
+    if (fixedField != null) {
+      effectiveCascades = fixedField.cascades;
+    } else if (sharedCascades != null) {
       effectiveCascades = sharedCascades;
     } else if (cascades.isNotEmpty &&
         hasStaticShadowCasters &&
@@ -3769,7 +3778,9 @@ base class Scene implements SceneGraph {
     // use one resolution, the directional light's when it casts, otherwise the
     // spots', otherwise twice a point caster's face resolution (faces pack
     // four to a tile at half the tile edge).
-    if (cascades.isNotEmpty ||
+    if (fixedField != null) {
+      graph.addPass(DirectionalShadowFieldPass(fixedField));
+    } else if (cascades.isNotEmpty ||
         spotShadowFrame != null ||
         pointShadowFrame != null) {
       graph.addPass(
@@ -3992,7 +4003,7 @@ base class Scene implements SceneGraph {
             cameraUp: cameraUp,
             cullingPlanes: view.cullingPlanes,
             cameraTransform: currentJitteredViewProjection,
-            primaryView: viewIndex >= 0,
+            primaryView: viewIndex >= 0 || beforeFinalSubmit != null,
           ),
         );
       }
@@ -4091,7 +4102,7 @@ base class Scene implements SceneGraph {
     graph.addPass(
       ScenePass(
         camera: camera,
-        primaryView: viewIndex >= 0,
+        primaryView: viewIndex >= 0 || beforeFinalSubmit != null,
         renderScene: renderScene,
         dimensions: pixelSize,
         environmentMap: environmentMap,
@@ -4139,6 +4150,7 @@ base class Scene implements SceneGraph {
         time: DateTime.now().millisecondsSinceEpoch.remainder(100000) / 1000.0,
         cullingPlanes: view.cullingPlanes,
         includeOffscreen: _warmUpIncludeOffscreen,
+        drawRenderOnTop: !captureLinearColor,
         cameraTransform: currentJitteredViewProjection,
         debugView: debugFrame,
       ),
@@ -4226,7 +4238,7 @@ base class Scene implements SceneGraph {
           cameraForward: camera.forward,
           layerMask: view.layerMask,
           cullingPlanes: view.cullingPlanes,
-          primaryView: viewIndex >= 0,
+          primaryView: viewIndex >= 0 || beforeFinalSubmit != null,
         ),
       );
     }

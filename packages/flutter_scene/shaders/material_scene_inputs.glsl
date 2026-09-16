@@ -192,6 +192,11 @@ uniform FragInfo {
   highp vec4 view_projection;
   // xyz: the camera's world-space position. w unused.
   highp vec4 camera_position;
+  // x: underside strength, y: total regional atlas tiles (1 ordinary),
+  // z: contact strength, w: sun shadow opacity. No additional sampler.
+  highp vec4 shadow_art;
+  // Camera-independent contact field center and sphere radius.
+  highp vec4 shadow_region;
 }
 frag_info;
 

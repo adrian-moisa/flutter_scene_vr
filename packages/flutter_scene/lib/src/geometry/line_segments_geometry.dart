@@ -171,7 +171,8 @@ class LineSegmentsGeometry extends Geometry {
     frameInfo[34] = cameraPosition.z;
     // [35] padding
     frameInfo[36] = _width * 0.5;
-    // [37..39] unused
+    frameInfo[37] = depthBias;
+    // [38..39] unused
     frameInfo[40] = currentDrawDepthOffset[0];
     frameInfo[41] = currentDrawDepthOffset[1];
     pass.bindUniform(

@@ -188,7 +188,7 @@ class VelocityPass extends RenderGraphPass {
         (_currentViewProjection.determinant() < 0) != raster.reversed;
 
     void submitItem(RenderItem item) {
-      if (!item.drawsColor) return;
+      if (!item.drawsColor || item.renderOnTop) return;
       if ((item.layers & _layerMask) == 0) return;
       if (!item.isMoving) return;
 
@@ -199,7 +199,7 @@ class VelocityPass extends RenderGraphPass {
 
       final vertexShader = isSkinned
           ? _skinnedVertexShader
-          : _unskinnedVertexShader;
+          : item.geometry.velocityVertexShader ?? _unskinnedVertexShader;
       final vertexLayout = isSkinned
           ? _kSkinnedVelocityLayout
           : item.geometry.velocityPositionLayout;
@@ -279,7 +279,7 @@ class VelocityPass extends RenderGraphPass {
             ByteData.sublistView(unskinnedModelInfo),
           ),
         );
-        item.geometry.bindPositionStream(renderPass);
+        item.geometry.bindVelocityPositionStream(renderPass);
         bindSingleInstanceData(renderPass, item.worldTransform, slot: 1);
       }
 

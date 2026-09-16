@@ -166,6 +166,11 @@ abstract class Geometry {
   Float32List? _cpuNormals;
   Float32List? _cpuColors;
   Float32List? _cpuTangents;
+  int _raycastDataVersion = 0;
+
+  /// Changes whenever the retained CPU triangle stream is replaced.
+  @internal
+  int get raycastDataVersion => _raycastDataVersion;
 
   gpu.Shader? _vertexShader;
   String? _vertexShaderName;
@@ -606,6 +611,7 @@ abstract class Geometry {
     final vertexBytes = _asByteData(vertices);
     _cpuVertices = vertexBytes;
     _cpuIndices = indices == null ? null : _asByteData(indices);
+    _raycastDataVersion++;
 
     _uploadStreams(
       _vertexStreamBytes(vertices, vertexCount),
@@ -657,6 +663,7 @@ abstract class Geometry {
     _cpuTangents = null;
     // Indices alone still feed the wireframe overlay's edge list.
     _cpuIndices = indices == null ? null : _asByteData(indices);
+    _raycastDataVersion++;
     _uploadsCallerStreams = true;
     _uploadStreams(streams, vertexCount, indices, indexType, bufferArena);
   }
@@ -812,6 +819,7 @@ abstract class Geometry {
     _cpuTangents = tangents;
     _cpuIndices = indices;
     _cpuVertices = null;
+    _raycastDataVersion++;
   }
 
   /// Internal: the retained CPU vertex/index data for scene raycasts. Either
@@ -1401,12 +1409,24 @@ abstract class Geometry {
   ({gpu.Shader shader, VertexLayoutDescriptor layout})?
   _declaredDepthOnlyVertex;
 
+  /// Optional position-only motion shader for geometry displaced on the GPU.
+  /// It implements the VelocityFrameInfo/VelocityModelInfo contract with the
+  /// geometry's position layout. Null retains the standard motion shader.
+  @internal
+  gpu.Shader? get velocityVertexShader => null;
+
+  /// Binds positions and any displacement resources for the motion pass.
+  /// Separate from depth binding because each shader owns its resource slots.
+  @internal
+  void bindVelocityPositionStream(gpu.RenderPass pass) =>
+      bindPositionStream(pass);
+
   /// The layout the velocity pass reads this geometry's positions with, its
   /// first stream (a float3 `position`) and the instance-rate model
   /// transform, or null when that stream holds no position the pass's
   /// engine shader can read, so the draw gets no motion vectors.
-  // TODO(custom-velocity-vertex): let a caller-formatted geometry supply a
-  // velocity vertex shader, so a packed position still gets motion vectors.
+  // A custom velocity shader still uses this position layout; geometries
+  // with packed positions override it alongside velocityVertexShader.
   @internal
   VertexLayoutDescriptor? get velocityPositionLayout {
     if (_vertexLayout == null) {
