@@ -37,7 +37,14 @@ workaround, and it disappears when windowing reaches stable upstream
 
 ## Working on the master channel
 
-The source targets 3.47 stable, which is what [`flutter.version`](flutter.version)
+**Flutter Scene VR fork:** our `vr` branch uses the matching Flutter VR fork
+rebased onto Flutter master. We intentionally commit the window-name changes
+from `window_names_master.patch`; do not apply the patch again or reverse it
+before committing on this branch. The upstream apply/reverse workflow below
+assumes an unpatched checkout. During future rebases, check whether upstream
+has adopted the same names and drop any redundant fork changes after review.
+
+Upstream's unpatched source targets 3.47 stable, which is what [`flutter.version`](flutter.version)
 pins and what the distribution builds against. Master renamed the windowing API
 (dropping the `Regular` prefix) and re-exports `ScrollCacheExtent` through
 `material.dart`, so three files do not compile there as written. Patch them,

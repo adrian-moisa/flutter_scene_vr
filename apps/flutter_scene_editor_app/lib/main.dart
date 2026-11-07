@@ -35,7 +35,7 @@ void main() {
   // (flutter/flutter#30701) and the dart-define arrives on its own.
   isWindowingEnabled = true;
   WidgetsFlutterBinding.ensureInitialized();
-  final controller = RegularWindowController(
+  final controller = WindowController(
     size: const Size(1280, 800),
     // The runner styles the window with a hidden title bar by this title
     // (see AppDelegate.swift); keep the two in sync.
@@ -43,13 +43,13 @@ void main() {
     delegate: _MainWindowDelegate(),
   );
   runWidget(
-    RegularWindow(controller: controller, child: const FlutterSceneEditorApp()),
+    Window(controller: controller, child: const FlutterSceneEditorApp()),
   );
 }
 
 /// Quits the app when the main editor window closes, taking any floating
 /// panel windows with it.
-class _MainWindowDelegate with RegularWindowControllerDelegate {
+class _MainWindowDelegate with WindowControllerDelegate {
   @override
   void onWindowDestroyed() {
     exit(0);
